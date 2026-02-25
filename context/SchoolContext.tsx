@@ -1,13 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
-  MOCK_RECEIPTS,
-  MOCK_LOANS,
-  INITIAL_APPROVALS,
-  FINANCIAL_RECORDS,
-  BUDGET_ITEMS
-} from '../constants';
-import {
   Receipt,
   LoanContract,
   ApprovalRequest,
@@ -89,11 +82,11 @@ const SchoolContext = createContext<SchoolContextType | undefined>(undefined);
 // Provider
 // ========================================
 export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [receipts, setReceipts] = useState<Receipt[]>(MOCK_RECEIPTS);
-  const [loans, setLoans] = useState<LoanContract[]>(MOCK_LOANS);
-  const [approvals, setApprovals] = useState<ApprovalRequest[]>(INITIAL_APPROVALS);
-  const [financialRecords] = useState<FinancialRecord[]>(FINANCIAL_RECORDS);
-  const [budgetItems] = useState<BudgetItem[]>(BUDGET_ITEMS);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [loans, setLoans] = useState<LoanContract[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  const [financialRecords] = useState<FinancialRecord[]>([]);
+  const [budgetItems] = useState<BudgetItem[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [schoolSettings, setSchoolSettings] = useState<SchoolSettingsData>(DEFAULT_SETTINGS);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);

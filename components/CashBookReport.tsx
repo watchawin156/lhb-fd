@@ -872,13 +872,6 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                         </h1>
                         <div className="flex items-center gap-3 mt-1">
                             <p className="text-sm text-slate-500">ปีงบประมาณ {fyBE}</p>
-                            <button onClick={handleCarryForward}
-                                className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold border border-amber-200 transition-all hover:shadow-sm"
-                                title={`ยกยอดคงเหลือจากปีงบประมาณ ${prevFyBE} มาเป็นยอดยกมาของปี ${fyBE}`}
-                            >
-                                <span className="material-symbols-outlined text-sm">input</span>
-                                ยกยอดคงเหลือจากปี {prevFyBE}
-                            </button>
                         </div>
                     </div>
                     <div className="flex gap-2 items-center flex-wrap">
