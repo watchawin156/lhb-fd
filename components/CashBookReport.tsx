@@ -775,9 +775,10 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
         return carried;
     }, [transactions, fyBE]);
 
-    const handleCarryForward = () => {
+    const handleCarryForward = async () => {
         const fyCE = fyBE - 543;
         const prevFyEnd = `${fyCE - 1}-09-30`;
+        const fyStartDate = `${fyCE - 1}-10-01`;
 
         const prevTxs = transactions.filter(t => t.date <= prevFyEnd);
         const balanceByFund: Record<string, number> = {};
@@ -791,8 +792,31 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
             .filter(([, bal]) => bal > 0)
             .map(([fundType, balance]) => ({ fundType, label: fundLabel(fundType), balance }));
 
-        if (items.length === 0) {
-            // ไม่มียอดจากระบบ → ใส่ข้อมูลยกมาปี 2568 ตามที่โรงเรียนแจ้ง
+        if (items.length > 0) {
+            // ✅ มีข้อมูลในระบบ → ยกยอดอัตโนมัติเลย
+            const itemsToCarry = items.filter(item => !carriedFundTypes.has(item.fundType));
+            if (itemsToCarry.length === 0) {
+                alert('ยกยอดครบทุกประเภทแล้ว');
+                return;
+            }
+            if (!confirm(`ยืนยันยกยอดคงเหลือจากปี ${prevFyBE} มาปี ${fyBE}\n\nรายการ ${itemsToCarry.length} ประเภท รวมยอด ${fmtMoney(itemsToCarry.reduce((s, i) => s + i.balance, 0))} บาท`)) return;
+
+            for (let idx = 0; idx < itemsToCarry.length; idx++) {
+                const { fundType, balance } = itemsToCarry[idx];
+                await addTransaction({
+                    id: Date.now() + idx,
+                    date: fyStartDate,
+                    docNo: '-',
+                    description: `ยกยอดมา (${fundLabel(fundType)}) จากปี ${prevFyBE}`,
+                    fundType,
+                    income: balance,
+                    expense: 0,
+                    payer: `ยกยอดจากปีงบ ${prevFyBE}`,
+                });
+            }
+            alert(`✅ ยกยอดสำเร็จ ${itemsToCarry.length} รายการ`);
+        } else {
+            // ไม่มีข้อมูลในระบบ → เปิด modal ให้กรอกเอง
             const presetData: { fundType: string; balance: number }[] = [
                 { fundType: 'fund-subsidy', balance: 1459.63 },
                 { fundType: 'fund-15y-book', balance: 0 },
@@ -806,15 +830,10 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                 { fundType: 'fund-state', balance: 322.71 },
                 { fundType: 'fund-school-income', balance: 2903.28 },
             ];
-            const presetItems = presetData
-                .map(d => ({ fundType: d.fundType, label: fundLabel(d.fundType), balance: d.balance }));
-            setCarryForwardItems(presetItems);
-            setIsManualMode(true); // เปิดโหมดแก้ไขเลย
-        } else {
-            setCarryForwardItems(items);
-            setIsManualMode(false);
+            setCarryForwardItems(presetData.map(d => ({ fundType: d.fundType, label: fundLabel(d.fundType), balance: d.balance })));
+            setIsManualMode(true);
+            setIsCarryForwardOpen(true);
         }
-        setIsCarryForwardOpen(true);
     };
 
     const handleCarryForwardConfirm = () => {
@@ -872,6 +891,13 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                         </h1>
                         <div className="flex items-center gap-3 mt-1">
                             <p className="text-sm text-slate-500">ปีงบประมาณ {fyBE}</p>
+                            <button onClick={handleCarryForward}
+                                className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold border border-amber-200 transition-all hover:shadow-sm"
+                                title={`ยกยอดคงเหลือจากปีงบประมาณ ${prevFyBE} มาปี ${fyBE}`}
+                            >
+                                <span className="material-symbols-outlined text-sm">input</span>
+                                ยกยอดจากปี {prevFyBE}
+                            </button>
                         </div>
                     </div>
                     <div className="flex gap-2 items-center flex-wrap">
