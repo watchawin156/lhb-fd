@@ -109,10 +109,8 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const loadAll = async () => {
       setIsLoading(true);
       try {
-        // โหลด transactions
         await refreshTransactions();
 
-        // โหลด settings
         try {
           const settings = await apiFetch('/settings');
           setSchoolSettings({ ...DEFAULT_SETTINGS, ...settings });
@@ -120,13 +118,29 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setSchoolSettings(DEFAULT_SETTINGS);
         }
 
-        // โหลด audit logs
         try {
           const logs = await apiFetch('/audit-logs');
           setAuditLogs(Array.isArray(logs) ? logs : []);
         } catch {
           setAuditLogs([]);
         }
+
+        // ==============================
+        // Auto-backup → Telegram
+        // throttle: ไม่เกิน 1 ครั้ง/ชั่วโมง
+        // ==============================
+        try {
+          const BACKUP_KEY = 'lhb_last_auto_backup';
+          const lastTs = Number(localStorage.getItem(BACKUP_KEY) || '0');
+          const ONE_HOUR = 60 * 60 * 1000;
+          if (Date.now() - lastTs > ONE_HOUR) {
+            // fire-and-forget (ไม่รอ response)
+            fetch('/api/backup', { method: 'POST' }).then(() => {
+              localStorage.setItem(BACKUP_KEY, String(Date.now()));
+            }).catch(() => { /* silent fail */ });
+          }
+        } catch { /* silent fail */ }
+
       } finally {
         setIsLoading(false);
       }

@@ -8,8 +8,11 @@ interface Env {
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     try {
+        // เก็บ log ย้อนหลัง 1 ปีเท่านั้น
         const { results } = await env.DB.prepare(
-            'SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 500'
+            `SELECT * FROM audit_logs
+             WHERE timestamp >= datetime('now', '-1 year')
+             ORDER BY timestamp DESC LIMIT 1000`
         ).all();
         return Response.json(results.map((r: any) => ({
             id: r.id,
@@ -27,14 +30,20 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     try {
         const body: any = await request.json();
+        // บันทึก log ใหม่
         const { meta } = await env.DB.prepare(
             `INSERT INTO audit_logs (timestamp, user_name, action, details, module)
-       VALUES (datetime('now'), ?, ?, ?, ?)`
+       VALUES (datetime('now', '+7 hours'), ?, ?, ?, ?)`
         ).bind(
             body.user || 'เจ้าหน้าที่การเงิน',
             body.action || '',
             body.details || '',
             body.module || ''
+        ).run();
+
+        // auto-prune: ลบ log ที่เกิน 1 ปี
+        await env.DB.prepare(
+            `DELETE FROM audit_logs WHERE timestamp < datetime('now', '-1 year')`
         ).run();
 
         return Response.json({ id: meta.last_row_id }, { status: 201 });
