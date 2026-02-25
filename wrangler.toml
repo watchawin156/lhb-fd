@@ -1,5 +1,9 @@
 name = "lhb-fd"
-compatibility_date = "2024-01-01"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
 
-[site]
-bucket = "./dist"
+[[d1_databases]]
+binding = "DB"
+database_name = "lhb-fd-db"
+database_id = "7ec45ad8-1984-4a31-b356-0cbe1fb2db58"

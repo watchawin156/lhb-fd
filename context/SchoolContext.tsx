@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   MOCK_RECEIPTS,
   MOCK_LOANS,
@@ -19,40 +19,24 @@ import {
   AuditLogEntry
 } from '../types';
 
-interface SchoolContextType {
-  receipts: Receipt[];
-  loans: LoanContract[];
-  approvals: ApprovalRequest[];
-  financialRecords: FinancialRecord[];
-  budgetItems: BudgetItem[];
-  transactions: Transaction[]; // Global transactions
-  schoolSettings: SchoolSettingsData;
-  auditLogs: AuditLogEntry[];
+// ========================================
+// API Base URL (Pages Function)
+// ========================================
+const API = '/api';
 
-  // Actions
-  addReceipt: (receipt: Receipt) => void;
-  addLoan: (loan: LoanContract) => void;
-  createPR: (pr: ApprovalRequest) => void;
-  processApproval: (id: string, action: 'approved' | 'rejected') => void;
-  addTransaction: (tx: Transaction) => void;
-  editTransaction: (id: number, updatedTx: Partial<Transaction>) => void;
-  deleteTransaction: (id: number, reason: string) => void;
-  updateSchoolSettings: (settings: Partial<SchoolSettingsData>) => void;
-  resetData: () => void; // New action
-  logAction: (action: string, details: string, module: string) => void;
+const apiFetch = async (path: string, options?: RequestInit) => {
+  const res = await fetch(`${API}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
+  return res.json();
+};
 
-  // Computed
-  totalRevenue: number;
-  totalExpense: number;
-  cashOnHand: number;
-}
-
-const SchoolContext = createContext<SchoolContextType | undefined>(undefined);
-
-// Initial Transactions (Empty)
-const INITIAL_TRANSACTIONS: Transaction[] = [];
-
-const INITIAL_SETTINGS: SchoolSettingsData = {
+// ========================================
+// Default Settings
+// ========================================
+const DEFAULT_SETTINGS: SchoolSettingsData = {
   schoolNameTH: 'โรงเรียนบ้านละหอกตะแบง',
   schoolNameEN: 'LahoktabangSchool',
   address: '185 หมู่ 5 ตำบลปราสาท อำเภอบ้านกรวด จังหวัดบุรีรัมย์ 31180',
@@ -68,143 +52,233 @@ const INITIAL_SETTINGS: SchoolSettingsData = {
   ]
 };
 
-const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [];
+// ========================================
+// Context Type
+// ========================================
+interface SchoolContextType {
+  receipts: Receipt[];
+  loans: LoanContract[];
+  approvals: ApprovalRequest[];
+  financialRecords: FinancialRecord[];
+  budgetItems: BudgetItem[];
+  transactions: Transaction[];
+  schoolSettings: SchoolSettingsData;
+  auditLogs: AuditLogEntry[];
+  isLoading: boolean;
 
+  addReceipt: (receipt: Receipt) => void;
+  addLoan: (loan: LoanContract) => void;
+  createPR: (pr: ApprovalRequest) => void;
+  processApproval: (id: string, action: 'approved' | 'rejected') => void;
+  addTransaction: (tx: Transaction) => Promise<void>;
+  editTransaction: (id: number, updatedTx: Partial<Transaction>) => Promise<void>;
+  deleteTransaction: (id: number, reason: string) => Promise<void>;
+  updateSchoolSettings: (settings: Partial<SchoolSettingsData>) => Promise<void>;
+  resetData: () => Promise<void>;
+  logAction: (action: string, details: string, module: string) => void;
+  refreshTransactions: () => Promise<void>;
+
+  totalRevenue: number;
+  totalExpense: number;
+  cashOnHand: number;
+}
+
+const SchoolContext = createContext<SchoolContextType | undefined>(undefined);
+
+// ========================================
+// Provider
+// ========================================
 export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [receipts, setReceipts] = useState<Receipt[]>(MOCK_RECEIPTS);
   const [loans, setLoans] = useState<LoanContract[]>(MOCK_LOANS);
   const [approvals, setApprovals] = useState<ApprovalRequest[]>(INITIAL_APPROVALS);
-  const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>(FINANCIAL_RECORDS);
-  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>(BUDGET_ITEMS);
+  const [financialRecords] = useState<FinancialRecord[]>(FINANCIAL_RECORDS);
+  const [budgetItems] = useState<BudgetItem[]>(BUDGET_ITEMS);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [schoolSettings, setSchoolSettings] = useState<SchoolSettingsData>(DEFAULT_SETTINGS);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load from localStorage on mount
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+  // ========================================
+  // Load data from D1 on mount
+  // ========================================
+  const refreshTransactions = useCallback(async () => {
     try {
-      const saved = localStorage.getItem('lhb_transactions');
-      return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
-    } catch { return INITIAL_TRANSACTIONS; }
-  });
-  const [schoolSettings, setSchoolSettings] = useState<SchoolSettingsData>(() => {
-    try {
-      const saved = localStorage.getItem('lhb_school_settings');
-      return saved ? { ...INITIAL_SETTINGS, ...JSON.parse(saved) } : INITIAL_SETTINGS;
-    } catch { return INITIAL_SETTINGS; }
-  });
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
-    try {
-      const saved = localStorage.getItem('lhb_audit_logs');
-      return saved ? JSON.parse(saved) : INITIAL_AUDIT_LOGS;
-    } catch { return INITIAL_AUDIT_LOGS; }
-  });
+      const data = await apiFetch('/transactions');
+      setTransactions(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.warn('Failed to load transactions from API, using empty array', e);
+      setTransactions([]);
+    }
+  }, []);
 
-  // Persist to localStorage on change
   useEffect(() => {
-    localStorage.setItem('lhb_transactions', JSON.stringify(transactions));
-  }, [transactions]);
-  useEffect(() => {
-    localStorage.setItem('lhb_school_settings', JSON.stringify(schoolSettings));
-  }, [schoolSettings]);
-  useEffect(() => {
-    localStorage.setItem('lhb_audit_logs', JSON.stringify(auditLogs));
-  }, [auditLogs]);
+    const loadAll = async () => {
+      setIsLoading(true);
+      try {
+        // โหลด transactions
+        await refreshTransactions();
 
+        // โหลด settings
+        try {
+          const settings = await apiFetch('/settings');
+          setSchoolSettings({ ...DEFAULT_SETTINGS, ...settings });
+        } catch {
+          setSchoolSettings(DEFAULT_SETTINGS);
+        }
 
-  // Computed Values
-  const totalRevenue = receipts
-    .filter(r => r.status === 'completed')
-    .reduce((acc, r) => acc + r.amount, 0);
+        // โหลด audit logs
+        try {
+          const logs = await apiFetch('/audit-logs');
+          setAuditLogs(Array.isArray(logs) ? logs : []);
+        } catch {
+          setAuditLogs([]);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadAll();
+  }, [refreshTransactions]);
 
-  const totalExpense = approvals
-    .filter(a => a.status === 'approved')
-    .reduce((acc, a) => acc + a.amount, 0) +
-    loans.reduce((acc, l) => acc + l.amount, 0);
-
-  // Start with 0 cash on hand
+  // ========================================
+  // Computed
+  // ========================================
+  const totalRevenue = receipts.filter(r => r.status === 'completed').reduce((acc, r) => acc + r.amount, 0);
+  const totalExpense = approvals.filter(a => a.status === 'approved').reduce((acc, a) => acc + a.amount, 0) + loans.reduce((acc, l) => acc + l.amount, 0);
   const cashOnHand = 0 + totalRevenue - totalExpense;
 
-  const logAction = (action: string, details: string, module: string) => {
+  // ========================================
+  // Helpers
+  // ========================================
+  const getFundTitle = (page: string) => {
+    const map: Record<string, string> = {
+      'fund-subsidy': 'เงินอุดหนุนรายหัว',
+      'fund-15y-book': 'ค่าหนังสือเรียน (เรียนฟรี 15 ปี)',
+      'fund-15y-supply': 'ค่าอุปกรณ์การเรียน (เรียนฟรี 15 ปี)',
+      'fund-15y-uniform': 'ค่าเครื่องแบบนักเรียน (เรียนฟรี 15 ปี)',
+      'fund-15y-activity': 'กิจกรรมพัฒนาคุณภาพผู้เรียน (เรียนฟรี 15 ปี)',
+      'fund-poor': 'เงินปัจจัยพื้นฐานนักเรียนยากจน',
+      'fund-eef': 'เงิน กสศ.',
+      'fund-lunch': 'เงินอาหารกลางวัน',
+      'fund-tax': 'เงินภาษี 1%',
+      'fund-state': 'เงินรายได้แผ่นดิน(ดอกเบี้ย)',
+      'fund-safekeeping': 'บันทึกการรับเงินเพื่อเก็บรักษา',
+      'fund-school-income': 'เงินรายได้สถานศึกษา',
+    };
+    return map[page] || 'บัญชีงบประมาณ';
+  };
+
+  const logAction = useCallback(async (action: string, details: string, module: string) => {
     const newLog: AuditLogEntry = {
       id: Date.now(),
       timestamp: new Date().toISOString(),
-      user: 'เจ้าหน้าที่การเงิน', // Mock user
+      user: 'เจ้าหน้าที่การเงิน',
       action,
       details,
       module
     };
     setAuditLogs(prev => [newLog, ...prev]);
-  };
-
-  const getFundTitle = (page: string) => {
-    switch (page) {
-      case 'fund-subsidy': return 'เงินอุดหนุนรายหัว';
-      case 'fund-15y-book': return 'ค่าหนังสือเรียน (เรียนฟรี 15 ปี)';
-      case 'fund-15y-supply': return 'ค่าอุปกรณ์การเรียน (เรียนฟรี 15 ปี)';
-      case 'fund-15y-uniform': return 'ค่าเครื่องแบบนักเรียน (เรียนฟรี 15 ปี)';
-      case 'fund-15y-activity': return 'กิจกรรมพัฒนาคุณภาพผู้เรียน (เรียนฟรี 15 ปี)';
-      case 'fund-poor': return 'เงินปัจจัยพื้นฐานนักเรียนยากจน';
-      case 'fund-eef': return 'เงิน กสศ.';
-      case 'fund-lunch': return 'เงินอาหารกลางวัน';
-      case 'fund-tax': return 'เงินภาษี 1%';
-      case 'fund-state': return 'เงินรายได้แผ่นดิน';
-      case 'fund-safekeeping': return 'บันทึกการรับเงินเพื่อเก็บรักษา';
-      case 'fund-school-income': return 'เงินรายได้สถานศึกษา';
-      default: return 'บัญชีงบประมาณ';
+    // บันทึกไป D1
+    try {
+      await apiFetch('/audit-logs', {
+        method: 'POST',
+        body: JSON.stringify({ action, details, module }),
+      });
+    } catch (e) {
+      console.warn('Failed to log action to API', e);
     }
-  };
+  }, []);
 
+  // ========================================
+  // Actions
+  // ========================================
   const addReceipt = (receipt: Receipt) => {
     setReceipts(prev => [receipt, ...prev]);
-    logAction('บันทึกรายรับ', `หน้ารายรับ เพิ่มใบเสร็จเลขที่ ${receipt.id} ยอดเงิน ${receipt.amount}`, 'revenue');
+    logAction('บันทึกรายรับ', `เพิ่มใบเสร็จเลขที่ ${receipt.id} ยอดเงิน ${receipt.amount}`, 'revenue');
   };
 
   const addLoan = (loan: LoanContract) => {
     setLoans(prev => [loan, ...prev]);
-    logAction('สร้างสัญญายืม', `หน้ายืมเงิน สร้างสัญญาเลขที่ ${loan.id} ผู้ยืม ${loan.requester} ยอดเงิน ${loan.amount}`, 'loan');
+    logAction('สร้างสัญญายืม', `สร้างสัญญาเลขที่ ${loan.id} ผู้ยืม ${loan.requester} ยอดเงิน ${loan.amount}`, 'loan');
   };
 
   const createPR = (pr: ApprovalRequest) => {
     setApprovals(prev => [pr, ...prev]);
-    logAction('สร้างใบขอซื้อ (PR)', `หน้าขออนุมัติเบิกจ่าย สร้างรายการ ${pr.title} ยอดเงิน ${pr.amount}`, 'expenditure');
+    logAction('สร้างใบขอซื้อ (PR)', `สร้างรายการ ${pr.title} ยอดเงิน ${pr.amount}`, 'expenditure');
   };
 
   const processApproval = (id: string, action: 'approved' | 'rejected') => {
-    setApprovals(prev => prev.map(item =>
-      item.id === id ? { ...item, status: action } : item
-    ));
-    logAction('อนุมัติรายการ', `หน้าขออนุมัติเบิกจ่าย เปลี่ยนสถานะรายการ ${id} เป็น ${action === 'approved' ? 'อนุมัติ' : 'ไม่อนุมัติ'}`, 'expenditure');
+    setApprovals(prev => prev.map(item => item.id === id ? { ...item, status: action } : item));
+    logAction('อนุมัติรายการ', `เปลี่ยนสถานะรายการ ${id} เป็น ${action === 'approved' ? 'อนุมัติ' : 'ไม่อนุมัติ'}`, 'expenditure');
   };
 
-  const addTransaction = (tx: Transaction) => {
-    setTransactions(prev => [...prev, tx]);
-    logAction('เพิ่มข้อมูล', `หน้า${getFundTitle(tx.fundType)} เพิ่มรายการที่เอกสาร ${tx.docNo || '-'} ยอดเงิน ${tx.income > 0 ? tx.income : tx.expense}`, tx.fundType);
+  const addTransaction = async (tx: Transaction) => {
+    try {
+      const saved = await apiFetch('/transactions', {
+        method: 'POST',
+        body: JSON.stringify(tx),
+      });
+      setTransactions(prev => [...prev, { ...tx, id: saved.id }]);
+      logAction('เพิ่มข้อมูล', `หน้า${getFundTitle(tx.fundType)} เพิ่มรายการที่เอกสาร ${tx.docNo || '-'} ยอดเงิน ${tx.income > 0 ? tx.income : tx.expense}`, tx.fundType);
+    } catch (e: any) {
+      console.error('addTransaction failed', e);
+      throw e;
+    }
   };
 
-  const editTransaction = (id: number, updatedTx: Partial<Transaction>) => {
+  const editTransaction = async (id: number, updatedTx: Partial<Transaction>) => {
     const tx = transactions.find(t => t.id === id);
-    setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updatedTx } : t));
-    logAction('แก้ไขข้อมูล', `หน้า${tx ? getFundTitle(tx.fundType) : 'บัญชีงบประมาณ'} แก้ไขรายการที่เอกสาร ${updatedTx.docNo || tx?.docNo || '-'}`, tx?.fundType || 'dashboard');
+    const merged = { ...tx, ...updatedTx };
+    try {
+      await apiFetch(`/transactions/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(merged),
+      });
+      setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updatedTx } : t));
+      logAction('แก้ไขข้อมูล', `หน้า${tx ? getFundTitle(tx.fundType) : 'บัญชีงบประมาณ'} แก้ไขรายการที่เอกสาร ${updatedTx.docNo || tx?.docNo || '-'}`, tx?.fundType || 'dashboard');
+    } catch (e: any) {
+      console.error('editTransaction failed', e);
+      throw e;
+    }
   };
 
-  const deleteTransaction = (id: number, reason: string) => {
+  const deleteTransaction = async (id: number, reason: string) => {
     const tx = transactions.find(t => t.id === id);
-    setTransactions(prev => prev.filter(t => t.id !== id));
-    logAction('ลบข้อมูล', `หน้า${tx ? getFundTitle(tx.fundType) : 'บัญชีงบประมาณ'} ลบรายการที่เอกสาร ${tx?.docNo || '-'} เนื่องจาก: ${reason}`, tx?.fundType || 'dashboard');
+    try {
+      await apiFetch(`/transactions/${id}`, { method: 'DELETE' });
+      setTransactions(prev => prev.filter(t => t.id !== id));
+      logAction('ลบข้อมูล', `หน้า${tx ? getFundTitle(tx.fundType) : 'บัญชีงบประมาณ'} ลบรายการที่เอกสาร ${tx?.docNo || '-'} เนื่องจาก: ${reason}`, tx?.fundType || 'dashboard');
+    } catch (e: any) {
+      console.error('deleteTransaction failed', e);
+      throw e;
+    }
   };
 
-  const updateSchoolSettings = (settings: Partial<SchoolSettingsData>) => {
-    setSchoolSettings(prev => ({ ...prev, ...settings }));
-    logAction('ตั้งค่าระบบ', 'หน้าตั้งค่าข้อมูลโรงเรียน อัปเดตข้อมูลรายละเอียดหน่วยงาน', 'settings-general');
+  const updateSchoolSettings = async (settings: Partial<SchoolSettingsData>) => {
+    const merged = { ...schoolSettings, ...settings };
+    try {
+      await apiFetch('/settings', {
+        method: 'POST',
+        body: JSON.stringify(merged),
+      });
+      setSchoolSettings(merged);
+      logAction('ตั้งค่าระบบ', 'อัปเดตข้อมูลรายละเอียดหน่วยงาน', 'settings-general');
+    } catch (e: any) {
+      console.error('updateSchoolSettings failed', e);
+      throw e;
+    }
   };
 
-  const resetData = () => {
-    setTransactions([]);
-    setReceipts([]);
-    setLoans([]);
-    setApprovals([]);
-    localStorage.removeItem('lhb_transactions');
-    localStorage.removeItem('lhb_audit_logs');
-    logAction('ล้างข้อมูล', 'รีเซ็ตข้อมูลระบบทั้งหมดและลบรายการบัญชีทั้งหมด', 'settings');
-    // keep settings
+  const resetData = async () => {
+    try {
+      await apiFetch('/audit-logs', { method: 'DELETE' });
+      setTransactions([]);
+      setAuditLogs([]);
+      logAction('ล้างข้อมูล', 'รีเซ็ตข้อมูลระบบทั้งหมดและลบรายการบัญชีทั้งหมด', 'settings');
+    } catch (e: any) {
+      console.error('resetData failed', e);
+    }
   };
 
   return (
@@ -217,6 +291,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       transactions,
       schoolSettings,
       auditLogs,
+      isLoading,
       addReceipt,
       addLoan,
       createPR,
@@ -227,9 +302,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       updateSchoolSettings,
       resetData,
       logAction,
+      refreshTransactions,
       totalRevenue,
       totalExpense,
-      cashOnHand
+      cashOnHand,
     }}>
       {children}
     </SchoolContext.Provider>
@@ -238,8 +314,6 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 export const useSchoolData = () => {
   const context = useContext(SchoolContext);
-  if (!context) {
-    throw new Error('useSchoolData must be used within a SchoolProvider');
-  }
+  if (!context) throw new Error('useSchoolData must be used within a SchoolProvider');
   return context;
 };
