@@ -818,17 +818,17 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
         } else {
             // ไม่มีข้อมูลในระบบ → เปิด modal ให้กรอกเอง
             const presetData: { fundType: string; balance: number }[] = [
-                { fundType: 'fund-subsidy', balance: 1459.63 },
+                { fundType: 'fund-subsidy', balance: 0 },
                 { fundType: 'fund-15y-book', balance: 0 },
-                { fundType: 'fund-15y-supply', balance: 300 },
-                { fundType: 'fund-15y-uniform', balance: 900 },
-                { fundType: 'fund-15y-activity', balance: 28390.00 },
+                { fundType: 'fund-15y-supply', balance: 0 },
+                { fundType: 'fund-15y-uniform', balance: 0 },
+                { fundType: 'fund-15y-activity', balance: 0 },
                 { fundType: 'fund-poor', balance: 0 },
-                { fundType: 'fund-eef', balance: 20071.59 },
-                { fundType: 'fund-lunch', balance: 125124.46 },
+                { fundType: 'fund-eef', balance: 0 },
+                { fundType: 'fund-lunch', balance: 0 },
                 { fundType: 'fund-tax', balance: 0 },
-                { fundType: 'fund-state', balance: 322.71 },
-                { fundType: 'fund-school-income', balance: 2903.28 },
+                { fundType: 'fund-state', balance: 0 },
+                { fundType: 'fund-school-income', balance: 0 },
             ];
             setCarryForwardItems(presetData.map(d => ({ fundType: d.fundType, label: fundLabel(d.fundType), balance: d.balance })));
             setIsManualMode(true);
