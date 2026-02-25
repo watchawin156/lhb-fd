@@ -1,0 +1,5 @@
+{
+  "name": "School Finance Dashboard",
+  "description": "Executive financial summary dashboard for schools featuring real-time budget tracking, cash flow analysis, and approval workflows.",
+  "requestFramePermissions": []
+}
