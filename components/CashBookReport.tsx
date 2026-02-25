@@ -817,20 +817,8 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
             alert(`✅ ยกยอดสำเร็จ ${itemsToCarry.length} รายการ`);
         } else {
             // ไม่มีข้อมูลในระบบ → เปิด modal ให้กรอกเอง
-            const presetData: { fundType: string; balance: number }[] = [
-                { fundType: 'fund-subsidy', balance: 0 },
-                { fundType: 'fund-15y-book', balance: 0 },
-                { fundType: 'fund-15y-supply', balance: 0 },
-                { fundType: 'fund-15y-uniform', balance: 0 },
-                { fundType: 'fund-15y-activity', balance: 0 },
-                { fundType: 'fund-poor', balance: 0 },
-                { fundType: 'fund-eef', balance: 0 },
-                { fundType: 'fund-lunch', balance: 0 },
-                { fundType: 'fund-tax', balance: 0 },
-                { fundType: 'fund-state', balance: 0 },
-                { fundType: 'fund-school-income', balance: 0 },
-            ];
-            setCarryForwardItems(presetData.map(d => ({ fundType: d.fundType, label: fundLabel(d.fundType), balance: d.balance })));
+            // เริ่ม modal ว่างเปล่า ผู้ใช้เพิ่มเองเฉพาะหมวดที่มีเงิน
+            setCarryForwardItems([]);
             setIsManualMode(true);
             setIsCarryForwardOpen(true);
         }
