@@ -222,7 +222,7 @@ export async function buildCashBookPDF(
     const FSZ = 14;
     const FSZ_HDR = 11;
 
-    const cDate = 38, cDoc = 44, cDesc = 120, cCash = 48, cBudg = 48, cRev = 48;
+    const cDate = 46, cDoc = 44, cDesc = 106, cCash = 54, cBudg = 54, cRev = 54;
     const cNon = SW - cDate - cDoc - cDesc - cCash - cBudg - cRev;
     const xL = mL, xR = mL + SW;
     const H1 = 28, H2 = 20, H3 = 22, RH = 20;
@@ -511,9 +511,10 @@ export async function buildCashBookPDF(
         dayLeft.push({ labelOnly: 'รวมรับ', bold: true, cash: day.totalRec.cash, budget: day.totalRec.budget, revenue: day.totalRec.revenue, nonBudget: day.totalRec.nonBudget });
         dayLeft.push({ labelOnly: 'รวมตั้งแต่ต้นปี', bold: true, cash: day.accRec.cash, budget: day.accRec.budget, revenue: day.accRec.revenue, nonBudget: day.accRec.nonBudget });
 
-        dayRight.push({ labelOnly: 'ยอดยกไป', bold: true, cash: day.yodYokPai, budget: null, revenue: null, nonBudget: day.yodYokPai });
+        // ฝั่งจ่าย: spacer, รวมจ่าย, ยอดยกไป (ไม่เอารวมตั้งแต่ต้นปี)
+        dayRight.push({});
         dayRight.push({ labelOnly: 'รวมจ่าย', bold: true, cash: day.totalPay.cash, budget: day.totalPay.budget, revenue: day.totalPay.revenue, nonBudget: day.totalPay.nonBudget });
-        dayRight.push({ labelOnly: 'รวมตั้งแต่ต้นปี', bold: true, cash: day.accPay.cash, budget: day.accPay.budget, revenue: day.accPay.revenue, nonBudget: day.accPay.nonBudget });
+        dayRight.push({ labelOnly: 'ยอดยกไป', bold: true, cash: day.yodYokPai, budget: null, revenue: null, nonBudget: day.yodYokPai });
 
         dayGroups.push({ leftRows: dayLeft, rightRows: dayRight });
     });
@@ -572,6 +573,10 @@ export async function buildCashBookPDF(
                 // Done with this day
                 dayIdx++;
                 rowIdx = 0;
+                // บังคับ: 1 วัน/หน้า — ถ้ายังมีวันถัดไป ให้ขึ้นหน้าใหม่เสมอ
+                if (dayIdx < dayGroups.length) {
+                    pageFull = true;
+                }
             }
         }
 

@@ -179,6 +179,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
     const [isCarryForwardOpen, setIsCarryForwardOpen] = useState(false);
     const [carryForwardItems, setCarryForwardItems] = useState<{ fundType: string; label: string; balance: number }[]>([]);
     const [isManualMode, setIsManualMode] = useState(false);
+    const [isViewMode, setIsViewMode] = useState(false); // ดูรายการที่ยกครบแล้ว
 
     // Cash Book fund filter
     const [cashBookFilter, setCashBookFilter] = useState<string>('all');
@@ -777,48 +778,98 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
 
     const handleCarryForward = async () => {
         const fyCE = fyBE - 543;
-        const prevFyEnd = `${fyCE - 1}-09-30`;
         const fyStartDate = `${fyCE - 1}-10-01`;
-
-        const prevTxs = transactions.filter(t => t.date <= prevFyEnd);
-        const balanceByFund: Record<string, number> = {};
-        prevTxs.forEach(t => {
-            if (!balanceByFund[t.fundType]) balanceByFund[t.fundType] = 0;
-            balanceByFund[t.fundType] += (t.income || 0) - (t.expense || 0);
-        });
-
         const fundLabel = (ft: string) => FUND_TYPE_OPTIONS.find(o => o.value === ft)?.label || ft;
-        const items = Object.entries(balanceByFund)
-            .filter(([, bal]) => bal > 0)
-            .map(([fundType, balance]) => ({ fundType, label: fundLabel(fundType), balance }));
 
-        if (items.length > 0) {
-            // ✅ มีข้อมูลในระบบ → ยกยอดอัตโนมัติเลย
-            const itemsToCarry = items.filter(item => !carriedFundTypes.has(item.fundType));
-            if (itemsToCarry.length === 0) {
-                alert('ยกยอดครบทุกประเภทแล้ว');
-                return;
-            }
-            if (!confirm(`ยืนยันยกยอดคงเหลือจากปี ${prevFyBE} มาปี ${fyBE}\n\nรายการ ${itemsToCarry.length} ประเภท รวมยอด ${fmtMoney(itemsToCarry.reduce((s, i) => s + i.balance, 0))} บาท`)) return;
+        // 1. ตรวจสอบว่ายกยอดมาปีนี้แล้ว → แสดงรายการ (view mode)
+        const existingCarryFwd = transactions.filter(t =>
+            t.date === fyStartDate && t.description?.includes('ยกยอดมา')
+        );
+        if (existingCarryFwd.length > 0) {
+            const viewItems = existingCarryFwd.map(t => ({
+                fundType: t.fundType,
+                label: fundLabel(t.fundType),
+                balance: t.income || 0,
+            }));
+            setCarryForwardItems(viewItems);
+            setIsViewMode(true);
+            setIsManualMode(false);
+            setIsCarryForwardOpen(true);
+            return;
+        }
 
-            for (let idx = 0; idx < itemsToCarry.length; idx++) {
-                const { fundType, balance } = itemsToCarry[idx];
-                await addTransaction({
-                    id: Date.now() + idx,
-                    date: fyStartDate,
-                    docNo: '-',
-                    description: `ยกยอดมา (${fundLabel(fundType)}) จากปี ${prevFyBE}`,
-                    fundType,
-                    income: balance,
-                    expense: 0,
-                    payer: `ยกยอดจากปีงบ ${prevFyBE}`,
+        // 2. หาข้อมูลย้อนหลังสูงสุด 5 ปี (อัตโนมัติ chain)
+        let chainFromFyCE = -1;
+        let balanceByFund: Record<string, number> = {};
+
+        for (let yearsBack = 1; yearsBack <= 5; yearsBack++) {
+            const checkFyCE = fyCE - yearsBack;
+            const checkFyEnd = `${checkFyCE - 1}-09-30`;
+            const prevTxs = transactions.filter(t => t.date <= checkFyEnd);
+            if (prevTxs.length > 0) {
+                const bal: Record<string, number> = {};
+                prevTxs.forEach(t => {
+                    if (!bal[t.fundType]) bal[t.fundType] = 0;
+                    bal[t.fundType] += (t.income || 0) - (t.expense || 0);
                 });
+                const positives = Object.entries(bal).filter(([, b]) => b > 0);
+                if (positives.length > 0) {
+                    chainFromFyCE = checkFyCE;
+                    balanceByFund = Object.fromEntries(positives);
+                    break;
+                }
             }
-            alert(`✅ ยกยอดสำเร็จ ${itemsToCarry.length} รายการ`);
+        }
+
+        if (Object.keys(balanceByFund).length > 0) {
+            // คำนวณปีที่ต้อง chain
+            const yearsToChain: number[] = [];
+            for (let y = chainFromFyCE + 1; y <= fyCE; y++) {
+                yearsToChain.push(y);
+            }
+            const gapYears = yearsToChain.slice(0, -1); // ปีกลาง
+            const finalYear = fyCE; // ปีปัจจุบัน
+
+            const items = Object.entries(balanceByFund)
+                .filter(([, bal]) => bal > 0)
+                .map(([fundType, balance]) => ({ fundType, label: fundLabel(fundType), balance }));
+
+            const chainMsg = gapYears.length > 0
+                ? `\n\n\u26a0️ ระบบจะยกยอดผ่าน ${gapYears.map(y => y + 543).join(' → ')} → ${finalYear + 543} อัตโนมัติ`
+                : '';
+
+            if (!confirm(`ยืนยันยกยอดคงเหลือจากปี ${chainFromFyCE + 543} มาปี ${fyBE}\n\nรายการ ${items.length} ประเภท รวมยอด ${fmtMoney(items.reduce((s, i) => s + i.balance, 0))} บาท${chainMsg}`)) return;
+
+            // ยกยอดผ่านทุกปี (chain)
+            for (const yearCE of yearsToChain) {
+                const yearStartDate = `${yearCE - 1}-10-01`;
+                const yearBE = yearCE + 543;
+                const fromBE = yearBE - 1;
+                // ตรวจว่าปีนี้ยกยอดแล้วหรือยัง
+                const alreadyHas = transactions.some(t =>
+                    t.date === yearStartDate && t.description?.includes('ยกยอดมา')
+                );
+                if (alreadyHas) continue;
+
+                for (let idx = 0; idx < items.length; idx++) {
+                    const { fundType, balance } = items[idx];
+                    await addTransaction({
+                        id: Date.now() + idx,
+                        date: yearStartDate,
+                        docNo: '-',
+                        description: `ยกยอดมา (${fundLabel(fundType)}) จากปี ${fromBE}`,
+                        fundType,
+                        income: balance,
+                        expense: 0,
+                        payer: `ยกยอดจากปีงบ ${fromBE}`,
+                    });
+                }
+            }
+            alert(`✅ ยกยอดสำเร็จ${gapYears.length > 0 ? ` (chain ${yearsToChain.length} ปี)` : ''}: ${items.length} รายการ`);
         } else {
-            // ไม่มีข้อมูลในระบบ → เปิด modal ให้กรอกเอง
-            // เริ่ม modal ว่างเปล่า ผู้ใช้เพิ่มเองเฉพาะหมวดที่มีเงิน
+            // Manual mode
             setCarryForwardItems([]);
+            setIsViewMode(false);
             setIsManualMode(true);
             setIsCarryForwardOpen(true);
         }
@@ -2241,15 +2292,21 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                     <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in max-h-[90vh] flex flex-col">
                         <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-amber-50 shrink-0">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                                    <span className="material-symbols-outlined text-amber-700">input</span>
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isViewMode ? 'bg-green-100' : 'bg-amber-100'}`}>
+                                    <span className={`material-symbols-outlined ${isViewMode ? 'text-green-700' : 'text-amber-700'}`}>
+                                        {isViewMode ? 'task_alt' : 'input'}
+                                    </span>
                                 </div>
                                 <div>
-                                    <h3 className="text-base font-bold text-gray-900">ยกยอดคงเหลือจากปี {prevFyBE}</h3>
-                                    <p className="text-xs text-amber-700">เข้าปีงบประมาณ {fyBE}</p>
+                                    <h3 className="text-base font-bold text-gray-900">
+                                        {isViewMode ? `รายการยกยอดมาปี ${fyBE}` : `ยกยอดคงเหลือจากปี ${prevFyBE}`}
+                                    </h3>
+                                    <p className={`text-xs ${isViewMode ? 'text-green-700' : 'text-amber-700'}`}>
+                                        {isViewMode ? `บันทึกแล้ว — ยอดรวม ${fmtMoney(carryForwardItems.reduce((s, i) => s + i.balance, 0))} บาท` : `เข้าปีงบประมาณ ${fyBE}`}
+                                    </p>
                                 </div>
                             </div>
-                            <button onClick={() => setIsCarryForwardOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+                            <button onClick={() => { setIsCarryForwardOpen(false); setIsViewMode(false); }} className="text-gray-400 hover:text-red-500 transition-colors">
                                 <span className="material-symbols-outlined">close</span>
                             </button>
                         </div>
@@ -2351,39 +2408,51 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                         </div>
 
                         <div className="px-5 py-4 border-t border-gray-100 flex flex-col gap-2 shrink-0 bg-gray-50/50">
-                            {!isManualMode && (
+                            {isViewMode ? (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setIsManualMode(true);
-                                        if (carryForwardItems.length === 0) {
-                                            handleAddManualFund();
-                                        }
-                                    }}
-                                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors flex items-center justify-center gap-2"
+                                    onClick={() => { setIsCarryForwardOpen(false); setIsViewMode(false); }}
+                                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
                                 >
-                                    <span className="material-symbols-outlined text-base">edit_note</span>
-                                    กรอกยอดคงเหลือด้วยตัวเอง
+                                    ปิด
                                 </button>
+                            ) : (
+                                <>
+                                    {!isManualMode && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsManualMode(true);
+                                                if (carryForwardItems.length === 0) {
+                                                    handleAddManualFund();
+                                                }
+                                            }}
+                                            className="w-full py-2.5 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <span className="material-symbols-outlined text-base">edit_note</span>
+                                            กรอกยอดคงเหลือด้วยตัวเอง
+                                        </button>
+                                    )}
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsCarryForwardOpen(false)}
+                                            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                                        >
+                                            ยกเลิก
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleCarryForwardConfirm}
+                                            disabled={carryForwardItems.filter(i => i.balance > 0).length === 0}
+                                            className="flex-[2] py-2.5 rounded-xl text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center gap-2"
+                                        >
+                                            <span className="material-symbols-outlined text-base">check</span>
+                                            ยืนยันยกยอด
+                                        </button>
+                                    </div>
+                                </>
                             )}
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsCarryForwardOpen(false)}
-                                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
-                                >
-                                    ยกเลิก
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleCarryForwardConfirm}
-                                    disabled={carryForwardItems.filter(i => i.balance > 0).length === 0}
-                                    className="flex-[2] py-2.5 rounded-xl text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center gap-2"
-                                >
-                                    <span className="material-symbols-outlined text-base">check</span>
-                                    ยืนยันยกยอด
-                                </button>
-                            </div>
                         </div>
                     </div>
                 </div>
