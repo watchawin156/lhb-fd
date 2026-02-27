@@ -24,6 +24,7 @@ type LoanLike = {
 };
 
 type RepayRecord = {
+    id: string;
     date: string;
     amount: number;
 };
@@ -73,6 +74,31 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         if (directLoanId) {
             const directLoan = loans.find(l => l.id === directLoanId);
             if (directLoan) return directLoan;
+
+            // Build minimal loan info from related transfer entries when loan object is not in memory.
+            const relatedTx = transactions.filter((t: any) => {
+                if (String(t.loanId || '') === String(directLoanId)) return true;
+                const doc = String(t.docNo || '');
+                const desc = String(t.description || '');
+                return doc.includes(directLoanId) || desc.includes(directLoanId);
+            });
+            const lendTx = relatedTx.find((t: any) => (t.expense || 0) > 0 && String(t.description || '').includes('ยืม'));
+            const recvTx = relatedTx.find((t: any) => (t.income || 0) > 0 && String(t.description || '').includes('ยืม'));
+            const inferredAmount = Math.max(Number(lendTx?.expense || 0), Number(recvTx?.income || 0));
+            if (inferredAmount > 0) {
+                return {
+                    id: String(directLoanId),
+                    requester: schoolSettings.financeOfficerName || 'เจ้าหน้าที่การเงิน',
+                    project: recvTx?.fundType || selectedTx.fundType || 'เงินยืม',
+                    amount: inferredAmount,
+                    dateBorrowed: recvTx?.date || lendTx?.date || selectedTx.date,
+                    dueDate: recvTx?.date || lendTx?.date || selectedTx.date,
+                    status: 'active',
+                    fromFund: lendTx?.fundType,
+                    toFund: recvTx?.fundType,
+                    returnedAmount: 0,
+                };
+            }
         }
 
         const amount = Number(selectedTx.income > 0 ? selectedTx.income : selectedTx.expense);
@@ -134,7 +160,11 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                 if (byDate !== 0) return byDate;
                 return Number(b.id || 0) - Number(a.id || 0);
             })
-            .map((t: any) => ({ date: t.date, amount: Number(t.expense || 0) }));
+            .map((t: any) => ({
+                id: String(t.id ?? `${t.date}-${t.docNo}-${t.expense}`),
+                date: t.date,
+                amount: Number(t.expense || 0),
+            }));
     }, [linkedLoan, loanKeys, transactions]);
 
     const totalReturnedFromTx = repaymentRecords.reduce((sum, r) => sum + r.amount, 0);
@@ -153,11 +183,46 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
 
         if (String(selectedTx.docNo || '') === (selectedTx.loanId || '')) return null;
 
-        return { date: selectedTx.date, amount };
+        return {
+            id: String(selectedTx.id ?? `${selectedTx.date}-${selectedTx.docNo}-${amount}`),
+            date: selectedTx.date,
+            amount,
+        };
     }, [selectedTx, loanKeys]);
 
+    const repaymentHistoryForUI = useMemo<RepayRecord[]>(() => {
+        const rows: RepayRecord[] = [];
+        const seen = new Set<string>();
+
+        const pushUnique = (row: RepayRecord | null) => {
+            if (!row) return;
+            const key = `${row.id}|${row.date}|${row.amount}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            rows.push(row);
+        };
+
+        const hasSelectedInRepayRecords = selectedRepaymentForDoc
+            ? repaymentRecords.some((r) => (
+                r.date === selectedRepaymentForDoc.date
+                && Math.abs(r.amount - selectedRepaymentForDoc.amount) < 0.0001
+            ))
+            : false;
+
+        if (!hasSelectedInRepayRecords) {
+            pushUnique(selectedRepaymentForDoc);
+        }
+        repaymentRecords.forEach(pushUnique);
+
+        return rows.sort((a, b) => {
+            const byDate = new Date(b.date).getTime() - new Date(a.date).getTime();
+            if (byDate !== 0) return byDate;
+            return b.amount - a.amount;
+        });
+    }, [selectedRepaymentForDoc, repaymentRecords]);
+
     const returnDocData = selectedRepaymentForDoc || latestRepayment;
-    const hasReturnHistory = Boolean(returnDocData);
+    const hasReturnHistory = repaymentHistoryForUI.length > 0;
 
     useEffect(() => {
         if (isOpen && selectedTx && !isEditingTx && !showDeletePrompt) {
@@ -465,22 +530,36 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
 
                         {linkedLoan && (
                             <div className="space-y-2 mb-3">
-                                <div className="flex flex-wrap gap-2">
-                                    <button
-                                        onClick={() => handleOpenLoanPDF(false)}
-                                        className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center gap-1"
-                                    >
-                                        <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF ขอยืม
-                                    </button>
-                                    {hasReturnHistory && (
-                                        <button
-                                            onClick={() => handleOpenLoanPDF(true)}
-                                            className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 flex items-center justify-center gap-1"
-                                        >
-                                            <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF คืนเงิน
-                                        </button>
-                                    )}
-                                </div>
+                                <button
+                                    onClick={() => handleOpenLoanPDF(false)}
+                                    className="w-full py-2 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center gap-1"
+                                >
+                                    <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF ขอยืม
+                                </button>
+
+                                {hasReturnHistory && (
+                                    <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 space-y-2">
+                                        <p className="text-xs font-semibold text-teal-900">
+                                            PDF คืนเงินย้อนหลัง ({repaymentHistoryForUI.length} ฉบับ)
+                                        </p>
+                                        <div className="max-h-36 overflow-auto space-y-1.5 pr-1">
+                                            {repaymentHistoryForUI.map((record, index) => (
+                                                <button
+                                                    key={`${record.id}-${record.date}-${record.amount}-${index}`}
+                                                    onClick={() => handleOpenLoanPDF(true, record.amount, record.date)}
+                                                    className="w-full rounded-lg border border-teal-300 bg-white px-2 py-1.5 text-left hover:bg-teal-100 transition-colors"
+                                                >
+                                                    <p className="text-xs font-semibold text-teal-800">
+                                                        PDF คืนเงิน #{repaymentHistoryForUI.length - index}
+                                                    </p>
+                                                    <p className="text-[11px] text-teal-700">
+                                                        {fmtShort(record.date)} - ฿{fmtMoney(record.amount)}
+                                                    </p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {outstanding > 0 && (
                                     <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-3 space-y-2">
@@ -572,3 +651,4 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
 };
 
 export default CashBookDetailModal;
+
