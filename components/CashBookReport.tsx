@@ -6,7 +6,6 @@ import { generateDailyReportPDF } from './DailyReport';
 import CashBookAddModal from './cashbook/CashBookAddModal';
 import CashBookCarryForwardModal from './cashbook/CashBookCarryForwardModal';
 import CashBookCheckModal from './cashbook/CashBookCheckModal';
-import BorrowModal from './cashbook/BorrowModal';
 import ThaiDatePicker from './ThaiDatePicker';
 import { FUND_TYPE_OPTIONS } from '../utils';
 
@@ -86,9 +85,6 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
 
     // Check Modal
     const [isCheckModalOpen, setIsCheckModalOpen] = useState(false);
-
-    // Borrow Modal
-    const [isBorrowModalOpen, setIsBorrowModalOpen] = useState(false);
 
     // Carry Forward Modal
     const [isCarryForwardOpen, setIsCarryForwardOpen] = useState(false);
@@ -505,11 +501,6 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                             className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-red-500/30 transition-all">
                             <span className="material-symbols-outlined text-base">remove</span>
                             เพิ่มรายจ่าย
-                        </button>
-                        <button onClick={() => setIsBorrowModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-orange-500/30 transition-all">
-                            <span className="material-symbols-outlined text-base">currency_exchange</span>
-                            ยืมเงิน
                         </button>
 
                         {/* Bank Accounts Dropdown */}
@@ -1189,11 +1180,6 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                 </div>
             )}
 
-            {/* Borrow Money Modal */}
-            <BorrowModal
-                isOpen={isBorrowModalOpen}
-                onClose={() => setIsBorrowModalOpen(false)}
-            />
         </div>
     );
 };
