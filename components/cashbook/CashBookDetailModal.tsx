@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSchoolData } from '../../context/SchoolContext';
 import { FUND_TYPE_OPTIONS } from '../../utils';
-import { fmtShort, fmtMoney } from './utils';
+import { buildLoanDocPDF, openBlob } from '../loanPdfBuilder';
+import { fmtMoney, fmtShort } from './utils';
 
 interface CashBookDetailModalProps {
     isOpen: boolean;
@@ -10,15 +11,48 @@ interface CashBookDetailModalProps {
 }
 
 const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClose, txId }) => {
-    const { transactions, editTransaction, deleteTransaction, loans, repayLoan } = useSchoolData();
+    const { transactions, editTransaction, deleteTransaction, loans, repayLoan, schoolSettings } = useSchoolData();
     const [isEditingTx, setIsEditingTx] = useState(false);
     const [showDeletePrompt, setShowDeletePrompt] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState('');
     const [editTxData, setEditTxData] = useState({ date: '', docNo: '', description: '', amount: '', fundType: '', payer: '', payee: '' });
 
-    const selectedTx = transactions.find((t: any) => t.id === txId);
+    const selectedTx = useMemo(
+        () => transactions.find((t: any) => String(t.id) === String(txId)),
+        [transactions, txId]
+    );
 
-    // Reset state when opened with a new tx
+    const parseLoanIdFromDocNo = (docNo: string) => {
+        const match = docNo.match(/(LN(?:-AUTO)?-[A-Za-z0-9-]+)/);
+        return match ? match[1] : '';
+    };
+
+    const linkedLoan = useMemo(() => {
+        if (!selectedTx) return null;
+
+        const directLoanId = selectedTx.loanId || parseLoanIdFromDocNo(selectedTx.docNo || '');
+        if (directLoanId) {
+            const directLoan = loans.find(l => l.id === directLoanId);
+            if (directLoan) return directLoan;
+        }
+
+        // fallback for old transactions that don't have loanId
+        const amount = selectedTx.income > 0 ? selectedTx.income : selectedTx.expense;
+        if (!amount) return null;
+
+        const candidates = loans
+            .filter(l => Math.abs(l.amount - amount) < 0.0001)
+            .filter(l => (
+                (selectedTx.income > 0 && l.toFund === selectedTx.fundType) ||
+                (selectedTx.expense > 0 && l.fromFund === selectedTx.fundType)
+            ))
+            .sort((a, b) => String(b.dateBorrowed).localeCompare(String(a.dateBorrowed)));
+
+        return candidates[0] || null;
+    }, [selectedTx, loans]);
+
+    const outstanding = linkedLoan ? Math.max(0, linkedLoan.amount - (linkedLoan.returnedAmount || 0)) : 0;
+
     useEffect(() => {
         if (isOpen && selectedTx && !isEditingTx && !showDeletePrompt) {
             setEditTxData({
@@ -35,9 +69,9 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
 
     if (!isOpen || !selectedTx) return null;
 
-    const handleEditSave = () => {
+    const handleEditSave = async () => {
         const amt = parseFloat(editTxData.amount) || 0;
-        editTransaction(selectedTx.id, {
+        await editTransaction(selectedTx.id, {
             date: editTxData.date,
             docNo: editTxData.docNo,
             description: editTxData.description,
@@ -51,8 +85,8 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         onClose();
     };
 
-    const handleDelete = () => {
-        deleteTransaction(selectedTx.id, 'ลบรายการจากสมุดเงินสด');
+    const handleDelete = async () => {
+        await deleteTransaction(selectedTx.id, 'ลบรายการจากสมุดเงินสด');
         setShowDeletePrompt(false);
         setDeleteConfirm('');
         onClose();
@@ -65,6 +99,54 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         onClose();
     };
 
+    const handleOpenLoanPDF = async (isReturn: boolean, overrideAmount?: number) => {
+        if (!linkedLoan) {
+            alert('ไม่พบสัญญายืมที่เกี่ยวข้อง');
+            return;
+        }
+        try {
+            const amountForDoc = overrideAmount ?? (
+                isReturn
+                    ? (outstanding > 0 ? outstanding : (linkedLoan.returnedAmount || linkedLoan.amount))
+                    : linkedLoan.amount
+            );
+            const today = new Date().toISOString().slice(0, 10);
+            const pdfBytes = await buildLoanDocPDF(
+                { ...linkedLoan, amount: amountForDoc },
+                isReturn,
+                schoolSettings,
+                today
+            );
+            openBlob(pdfBytes);
+        } catch (e) {
+            console.warn('failed to generate loan pdf', e);
+            alert('สร้างเอกสาร PDF ไม่สำเร็จ');
+        }
+    };
+
+    const handleRepay = async () => {
+        if (!linkedLoan) {
+            alert('ไม่พบสัญญายืมที่เกี่ยวข้อง');
+            return;
+        }
+        if (outstanding <= 0) {
+            alert('สัญญานี้คืนครบแล้ว');
+            return;
+        }
+
+        const resp = window.prompt(
+            `กรอกจำนวนเงินที่จะคืนสัญญา ${linkedLoan.id} (ยอดคงเหลือ ${fmtMoney(outstanding)}):`,
+            String(outstanding)
+        );
+        const amt = parseFloat(resp || '0');
+        if (amt <= 0) return;
+
+        const repayAmount = Math.min(amt, outstanding);
+        await repayLoan(linkedLoan.id, repayAmount);
+        await handleOpenLoanPDF(true, repayAmount);
+        onClose();
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden animate-scale-in">
@@ -73,14 +155,11 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                         <p className="text-xs text-gray-400">รายละเอียดรายการ</p>
                         <h2 className="text-lg font-bold text-gray-900">{isEditingTx ? 'แก้ไขรายการ' : (selectedTx.income > 0 ? 'รายรับ' : 'รายจ่าย')}</h2>
                     </div>
-                    <button onClick={handleClose}
-                        className="text-blue-500 hover:text-blue-700 text-sm font-semibold">ปิด</button>
+                    <button onClick={handleClose} className="text-blue-500 hover:text-blue-700 text-sm font-semibold">ปิด</button>
                 </div>
 
                 {isEditingTx ? (
-                    /* Edit form */
                     <div className="px-6 pb-5 space-y-3">
-                        {/* วันที่ */}
                         <div>
                             <label className="text-xs font-semibold text-gray-500 block mb-1">วันที่</label>
                             <input
@@ -97,7 +176,7 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                                     const v = e.target.value;
                                     const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
                                     if (m) {
-                                        const be = parseInt(m[3]);
+                                        const be = parseInt(m[3], 10);
                                         const yr = be > 2400 ? be - 543 : be;
                                         const iso = `${yr}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
                                         setEditTxData({ ...editTxData, date: iso });
@@ -110,21 +189,23 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                             />
                         </div>
 
-                        {/* ที่เอกสาร */}
                         <div>
                             <label className="text-xs font-semibold text-gray-500 block mb-1">ที่เอกสาร</label>
-                            <input type="text" value={editTxData.docNo}
+                            <input
+                                type="text"
+                                value={editTxData.docNo}
                                 onChange={e => setEditTxData({ ...editTxData, docNo: e.target.value })}
-                                placeholder="เลขที่เอกสาร"
-                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 transition-colors" />
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 transition-colors"
+                            />
                         </div>
 
-                        {/* ประเภทเงิน */}
                         <div>
                             <label className="text-xs font-semibold text-gray-500 block mb-1">ประเภทเงิน</label>
-                            <select value={editTxData.fundType}
+                            <select
+                                value={editTxData.fundType}
                                 onChange={e => setEditTxData({ ...editTxData, fundType: e.target.value })}
-                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white transition-colors">
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white transition-colors"
+                            >
                                 {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => (
                                     <optgroup key={group} label={group}>
                                         {FUND_TYPE_OPTIONS.filter(o => o.group === group).map(opt => (
@@ -135,53 +216,64 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                             </select>
                         </div>
 
-                        {/* รายการ */}
                         <div>
                             <label className="text-xs font-semibold text-gray-500 block mb-1">รายการ</label>
-                            <input type="text" value={editTxData.description}
+                            <input
+                                type="text"
+                                value={editTxData.description}
                                 onChange={e => setEditTxData({ ...editTxData, description: e.target.value })}
-                                placeholder="รายละเอียดรายการ"
-                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 transition-colors" />
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 transition-colors"
+                            />
                         </div>
 
-                        {/* ผู้รับ / ผู้จ่าย */}
                         <div>
                             <label className="text-xs font-semibold text-gray-500 block mb-1">
                                 {selectedTx.income > 0 ? 'ผู้นำส่ง / หัวรายการ' : 'ผู้รับเงิน / หัวรายการ'}
                             </label>
-                            <input type="text"
+                            <input
+                                type="text"
                                 value={selectedTx.income > 0 ? editTxData.payer : editTxData.payee}
                                 onChange={e => {
                                     if (selectedTx.income > 0) setEditTxData({ ...editTxData, payer: e.target.value });
                                     else setEditTxData({ ...editTxData, payee: e.target.value });
                                 }}
-                                placeholder="ชื่อหัวรายการ (ไม่บังคับ)"
-                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 transition-colors" />
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 transition-colors"
+                            />
                         </div>
 
-                        {/* จำนวนเงิน */}
                         <div>
                             <label className="text-xs font-semibold text-gray-500 block mb-1">
                                 จำนวนเงิน ({selectedTx.income > 0 ? 'รับ' : 'จ่าย'})
                             </label>
                             <div className={`flex items-center rounded-xl px-4 py-3 border ${parseFloat(editTxData.amount) > 0 ? (selectedTx.income > 0 ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300') : 'bg-gray-50 border-gray-200'}`}>
-                                <input type="number" step="0.01" value={editTxData.amount}
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={editTxData.amount}
                                     onChange={e => setEditTxData({ ...editTxData, amount: e.target.value })}
                                     className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(editTxData.amount) > 0 ? (selectedTx.income > 0 ? 'text-green-700' : 'text-red-700') : 'text-gray-400'}`}
-                                    placeholder="0.00" />
+                                    placeholder="0.00"
+                                />
                                 <span className="text-sm text-gray-400 ml-2">บาท</span>
                             </div>
                         </div>
 
                         <div className="flex gap-2 pt-1">
-                            <button onClick={() => setIsEditingTx(false)}
-                                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors">ยกเลิก</button>
-                            <button onClick={handleEditSave}
-                                className="flex-[2] py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors">บันทึกการแก้ไข</button>
+                            <button
+                                onClick={() => setIsEditingTx(false)}
+                                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors"
+                            >
+                                ยกเลิก
+                            </button>
+                            <button
+                                onClick={handleEditSave}
+                                className="flex-[2] py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors"
+                            >
+                                บันทึกการแก้ไข
+                            </button>
                         </div>
                     </div>
-                ) : deleteConfirm !== null && deleteConfirm !== '' ? null : (
-                    /* View mode */
+                ) : (
                     <div className="px-6 pb-4">
                         <div className="space-y-2 mb-4">
                             {[
@@ -198,56 +290,78 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                                 </div>
                             ))}
                         </div>
-                        <div className="flex gap-2">
-                            {selectedTx.docNo?.startsWith('LN-') && (
-                                <button
-                                    onClick={() => {
-                                        const loan = loans.find(l => l.id === selectedTx.docNo);
-                                        if (!loan) {
-                                            alert('ไม่พบสัญญายืม');
-                                            return;
-                                        }
-                                        const outstanding = loan.amount - (loan.returnedAmount || 0);
-                                        const resp = window.prompt(`กรอกจำนวนเงินที่จะคืนสัญญา ${loan.id} (ยอดคงเหลือ ${fmtMoney(outstanding)}):`);
-                                        const amt = parseFloat(resp || '0');
-                                        if (amt > 0) {
-                                            repayLoan(loan.id, Math.min(amt, outstanding));
-                                            onClose();
-                                        }
-                                    }}
-                                    className="flex-1 py-2 rounded-xl text-sm font-semibold text-green-600 bg-green-50 hover:bg-green-100 flex items-center justify-center gap-1"
-                                >
-                                    <span className="material-symbols-outlined text-base">paid</span> คืนเงิน
-                                </button>
+
+                        {linkedLoan && (
+                            <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                                <p className="text-xs text-emerald-700">สัญญายืม: {linkedLoan.id}</p>
+                                <p className="text-xs text-emerald-800 font-semibold">ยอดคงเหลือ: ฿{fmtMoney(outstanding)}</p>
+                            </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2">
+                            {linkedLoan && (
+                                <>
+                                    <button
+                                        onClick={() => handleOpenLoanPDF(false)}
+                                        className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center gap-1"
+                                    >
+                                        <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF ขอยืม
+                                    </button>
+                                    <button
+                                        onClick={() => handleOpenLoanPDF(true)}
+                                        className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 flex items-center justify-center gap-1"
+                                    >
+                                        <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF คืนเงิน
+                                    </button>
+                                    <button
+                                        onClick={handleRepay}
+                                        disabled={outstanding <= 0}
+                                        className={`flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1 ${outstanding > 0 ? 'text-green-700 bg-green-50 hover:bg-green-100' : 'text-gray-400 bg-gray-100 cursor-not-allowed'}`}
+                                    >
+                                        <span className="material-symbols-outlined text-base">paid</span> คืนเงิน
+                                    </button>
+                                </>
                             )}
-                            <button onClick={() => setIsEditingTx(true)}
-                                className="flex-1 py-2 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 flex items-center justify-center gap-1">
+
+                            <button
+                                onClick={() => setIsEditingTx(true)}
+                                className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 flex items-center justify-center gap-1"
+                            >
                                 <span className="material-symbols-outlined text-base">edit</span> แก้ไข
                             </button>
-                            <button onClick={() => setShowDeletePrompt(true)}
-                                className="flex-1 py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 flex items-center justify-center gap-1">
+                            <button
+                                onClick={() => setShowDeletePrompt(true)}
+                                className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 flex items-center justify-center gap-1"
+                            >
                                 <span className="material-symbols-outlined text-base">delete</span> ลบ
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* Delete confirmation */}
                 {showDeletePrompt && !isEditingTx && (
                     <div className="px-6 pb-5 border-t border-gray-100 pt-4">
-                        <p className="text-sm text-red-600 font-semibold mb-2">⚠️ ยืนยันการลบรายการ</p>
+                        <p className="text-sm text-red-600 font-semibold mb-2">ยืนยันการลบรายการ</p>
                         <p className="text-xs text-gray-500 mb-3">พิมพ์ <span className="font-bold text-red-600">"ยืนยัน"</span> เพื่อยืนยันการลบ</p>
-                        <input type="text" value={deleteConfirm}
+                        <input
+                            type="text"
+                            value={deleteConfirm}
                             onChange={e => setDeleteConfirm(e.target.value)}
                             className="w-full px-3 py-2 rounded-xl border border-red-200 text-sm outline-none focus:border-red-400 mb-3"
-                            placeholder='พิมพ์ "ยืนยัน"' />
+                            placeholder='พิมพ์ "ยืนยัน"'
+                        />
                         <div className="flex gap-2">
-                            <button onClick={() => { setShowDeletePrompt(false); setDeleteConfirm(''); }}
-                                className="flex-1 py-2 rounded-xl text-sm font-medium text-gray-500 bg-gray-100 hover:bg-gray-200">ยกเลิก</button>
+                            <button
+                                onClick={() => { setShowDeletePrompt(false); setDeleteConfirm(''); }}
+                                className="flex-1 py-2 rounded-xl text-sm font-medium text-gray-500 bg-gray-100 hover:bg-gray-200"
+                            >
+                                ยกเลิก
+                            </button>
                             <button
                                 disabled={deleteConfirm !== 'ยืนยัน'}
                                 onClick={handleDelete}
-                                className={`flex-[2] py-2 rounded-xl text-sm font-semibold text-white transition-all ${deleteConfirm === 'ยืนยัน' ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-300 cursor-not-allowed'}`}>
+                                className={`flex-[2] py-2 rounded-xl text-sm font-semibold text-white transition-all ${deleteConfirm === 'ยืนยัน' ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-300 cursor-not-allowed'}`}
+                            >
                                 ลบรายการ
                             </button>
                         </div>

@@ -318,6 +318,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           fundType: loan.toFund,
           income: 0,
           expense: amount,
+          loanId,
           skipLoanCheck: true,
         });
         // income to the fund that lent money
@@ -329,30 +330,12 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           fundType: loan.fromFund,
           income: amount,
           expense: 0,
+          loanId,
           skipLoanCheck: true,
         });
       } catch (e) {
         console.warn('failed to add repayment transactions', e);
       }
-    }
-
-    // auto-print return document
-    const html = `
-      <html><head><title>หนังสือคืนเงิน ${loanId}</title></head><body>
-      <h1>หนังสือคืนเงินยืม</h1>
-      <p>เลขที่สัญญา: ${loan.id}</p>
-      <p>คืนจำนวน: ${amount.toLocaleString()}</p>
-      <p>จากหมวด: ${loan.toFund || '-'} ไปยัง ${loan.fromFund || '-'}</p>
-      <p>วันที่คืน: ${new Date().toISOString().slice(0,10)}</p>
-      <hr/>
-      <p>ลงชื่อ ...................................</p>
-      </body></html>`;
-    const w = window.open('', '_blank');
-    if (w) {
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      w.print();
     }
   };
 
@@ -421,6 +404,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               fundType: donor,
               income: 0,
               expense: shortfall,
+              loanId: loan.id,
               skipLoanCheck: true,
             });
             await doAddTransaction({
@@ -431,6 +415,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               fundType: tx.fundType,
               income: shortfall,
               expense: 0,
+              loanId: loan.id,
               skipLoanCheck: true,
             });
           } else {
@@ -498,6 +483,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             fundType: donor,
             income: 0,
             expense: shortfall,
+            loanId: loan.id,
             skipLoanCheck: true,
           });
           await doAddTransaction({
@@ -508,6 +494,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             fundType: merged.fundType,
             income: shortfall,
             expense: 0,
+            loanId: loan.id,
             skipLoanCheck: true,
           });
         } else {

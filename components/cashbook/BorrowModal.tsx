@@ -87,6 +87,7 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
                 fundType: selectedBank?.fundTypes[0] || 'fund-subsidy',
                 income: borrowAmountNum,
                 expense: 0,
+                loanId,
                 bankId: selectedBankId,
                 skipLoanCheck: true,
             });

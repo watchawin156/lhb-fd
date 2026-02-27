@@ -164,5 +164,5 @@ export async function buildLoanDocPDF(
     drawT(`วันที่ ${formatThaiDate(todayDate)}`, sigX2, y, 16, false, 'center');
 
     const pdfBytes = await pdfDoc.save();
-    openBlob(pdfBytes);
+    return pdfBytes;
 }

@@ -219,6 +219,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 fundType: borrowFromFund,
                 income: borrowAmountNum,
                 expense: 0,
+                loanId,
                 skipLoanCheck: true,
             });
 
