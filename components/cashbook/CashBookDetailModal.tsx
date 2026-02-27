@@ -66,60 +66,17 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         return match ? match[1] : '';
     };
 
-    const inferredLoan = useMemo<LoanLike | null>(() => {
-        if (!selectedTx) return null;
-
-        const description = String(selectedTx.description || '');
-        const docNo = String(selectedTx.docNo || '');
-        const isBorrowLike = Boolean(selectedTx.loanId) || docNo.includes('(ยืม)') || description.includes('ยืม');
-        if (!isBorrowLike) return null;
-
-        const amount = selectedTx.income > 0 ? selectedTx.income : selectedTx.expense;
-        if (!amount || amount <= 0) return null;
-
-        const groupTxs = transactions.filter((t: any) => t.date === selectedTx.date && t.docNo === selectedTx.docNo);
-        const donorTx = groupTxs.find((t: any) => t.expense > 0 && String(t.description || '').includes('ยืม'));
-        const receiverTx = groupTxs.find((t: any) => t.income > 0 && String(t.description || '').includes('ยืม'));
-
-        const inferredId = selectedTx.loanId || parseLoanIdFromDocNo(docNo) || `AUTO-${selectedTx.date}-${selectedTx.id}`;
-
-        const returnedAmount = transactions
-            .filter((t: any) => {
-                if ((t.expense || 0) <= 0) return false;
-                if (!String(t.description || '').includes('คืนเงินยืม')) return false;
-                return String(t.loanId || '') === inferredId
-                    || String(t.description || '').includes(inferredId)
-                    || String(t.docNo || '').includes(inferredId);
-            })
-            .reduce((sum: number, t: any) => sum + (t.expense || 0), 0);
-
-        return {
-            id: inferredId,
-            requester: schoolSettings.financeOfficerName || 'เจ้าหน้าที่การเงิน',
-            project: receiverTx?.fundType || selectedTx.fundType || 'เงินยืม',
-            amount,
-            dateBorrowed: selectedTx.date,
-            dueDate: selectedTx.date,
-            status: returnedAmount >= amount ? 'returned' : 'active',
-            fromFund: donorTx?.fundType || (selectedTx.expense > 0 ? selectedTx.fundType : undefined),
-            toFund: receiverTx?.fundType || (selectedTx.income > 0 ? selectedTx.fundType : undefined),
-            returnedAmount,
-        };
-    }, [selectedTx, transactions, schoolSettings.financeOfficerName]);
-
     const linkedLoan = useMemo<LoanLike | null>(() => {
         if (!selectedTx) return null;
 
-        const directLoanId = selectedTx.loanId || parseLoanIdFromDocNo(selectedTx.docNo || '');
+        const directLoanId = selectedTx.loanId || parseLoanIdFromDocNo(String(selectedTx.docNo || ''));
         if (directLoanId) {
             const directLoan = loans.find(l => l.id === directLoanId);
             if (directLoan) return directLoan;
         }
 
-        if (inferredLoan) return inferredLoan;
-
-        const amount = selectedTx.income > 0 ? selectedTx.income : selectedTx.expense;
-        if (!amount) return null;
+        const amount = Number(selectedTx.income > 0 ? selectedTx.income : selectedTx.expense);
+        if (!amount || amount <= 0) return null;
 
         const fallback = loans
             .filter(l => Math.abs(l.amount - amount) < 0.0001)
@@ -129,27 +86,48 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
             ))
             .sort((a, b) => String(b.dateBorrowed).localeCompare(String(a.dateBorrowed)));
 
-        return fallback[0] || null;
-    }, [selectedTx, loans, inferredLoan]);
+        if (fallback[0]) return fallback[0];
 
-    const repaymentRecords = useMemo<RepayRecord[]>(() => {
-        if (!linkedLoan) return [];
+        // Fallback for tx that has no loan object in memory
+        const groupTxs = transactions.filter((t: any) => t.date === selectedTx.date && t.docNo === selectedTx.docNo);
+        const donorTx = groupTxs.find((t: any) => (t.expense || 0) > 0 && String(t.description || '').includes('ยืม'));
+        const receiverTx = groupTxs.find((t: any) => (t.income || 0) > 0 && String(t.description || '').includes('ยืม'));
 
+        if (!donorTx && !receiverTx) return null;
+
+        return {
+            id: directLoanId || `AUTO-${selectedTx.date}-${selectedTx.id}`,
+            requester: schoolSettings.financeOfficerName || 'เจ้าหน้าที่การเงิน',
+            project: receiverTx?.fundType || selectedTx.fundType || 'เงินยืม',
+            amount,
+            dateBorrowed: selectedTx.date,
+            dueDate: selectedTx.date,
+            status: 'active',
+            fromFund: donorTx?.fundType || (selectedTx.expense > 0 ? selectedTx.fundType : undefined),
+            toFund: receiverTx?.fundType || (selectedTx.income > 0 ? selectedTx.fundType : undefined),
+            returnedAmount: 0,
+        };
+    }, [selectedTx, loans, transactions, schoolSettings.financeOfficerName]);
+
+    const loanKeys = useMemo(() => {
         const keys = new Set<string>();
-        if (linkedLoan.id) keys.add(linkedLoan.id);
+        if (linkedLoan?.id) keys.add(String(linkedLoan.id));
         if (selectedTx?.loanId) keys.add(String(selectedTx.loanId));
         const docLoanId = parseLoanIdFromDocNo(String(selectedTx?.docNo || ''));
         if (docLoanId) keys.add(docLoanId);
+        return Array.from(keys).filter(Boolean);
+    }, [linkedLoan?.id, selectedTx?.loanId, selectedTx?.docNo]);
 
-        const keyArr = Array.from(keys).filter(Boolean);
+    const repaymentRecords = useMemo<RepayRecord[]>(() => {
+        if (!linkedLoan) return [];
 
         return transactions
             .filter((t: any) => {
                 if ((t.expense || 0) <= 0) return false;
                 if (!String(t.description || '').includes('คืนเงินยืม')) return false;
 
-                if (t.loanId && keyArr.includes(String(t.loanId))) return true;
-                return keyArr.some(k => String(t.description || '').includes(k) || String(t.docNo || '').includes(k));
+                if (t.loanId && loanKeys.includes(String(t.loanId))) return true;
+                return loanKeys.some(k => String(t.description || '').includes(k) || String(t.docNo || '').includes(k));
             })
             .sort((a: any, b: any) => {
                 const byDate = new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -157,12 +135,29 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                 return Number(b.id || 0) - Number(a.id || 0);
             })
             .map((t: any) => ({ date: t.date, amount: Number(t.expense || 0) }));
-    }, [linkedLoan, selectedTx, transactions]);
+    }, [linkedLoan, loanKeys, transactions]);
 
     const totalReturnedFromTx = repaymentRecords.reduce((sum, r) => sum + r.amount, 0);
     const returnedMerged = linkedLoan ? Math.max(linkedLoan.returnedAmount || 0, totalReturnedFromTx) : 0;
     const outstanding = linkedLoan ? Math.max(0, linkedLoan.amount - returnedMerged) : 0;
+
     const latestRepayment = repaymentRecords[0] || null;
+    const selectedRepaymentForDoc = useMemo<RepayRecord | null>(() => {
+        if (!selectedTx) return null;
+        const amount = Number((selectedTx.expense || 0) > 0 ? selectedTx.expense : (selectedTx.income || 0));
+        if (amount <= 0) return null;
+
+        const hasRepayDesc = String(selectedTx.description || '').includes('คืนเงินยืม');
+        const hasLoanKey = loanKeys.some(k => String(selectedTx.docNo || '').includes(k) || String(selectedTx.description || '').includes(k));
+        if (!hasRepayDesc && !hasLoanKey) return null;
+
+        if (String(selectedTx.docNo || '') === (selectedTx.loanId || '')) return null;
+
+        return { date: selectedTx.date, amount };
+    }, [selectedTx, loanKeys]);
+
+    const returnDocData = selectedRepaymentForDoc || latestRepayment;
+    const hasReturnHistory = Boolean(returnDocData);
 
     useEffect(() => {
         if (isOpen && selectedTx && !isEditingTx && !showDeletePrompt) {
@@ -223,14 +218,14 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
             return;
         }
 
-        const amountForDoc = overrideAmount ?? (isReturn ? (latestRepayment?.amount || 0) : linkedLoan.amount);
+        const amountForDoc = overrideAmount ?? (isReturn ? (returnDocData?.amount || 0) : linkedLoan.amount);
         if (isReturn && amountForDoc <= 0) {
             alert('ยังไม่มีข้อมูลการคืนเงินสำหรับพิมพ์เอกสาร');
             return;
         }
 
         const docDate = overrideDate
-            || (isReturn ? latestRepayment?.date : linkedLoan.dateBorrowed)
+            || (isReturn ? returnDocData?.date : linkedLoan.dateBorrowed)
             || new Date().toISOString().slice(0, 10);
 
         try {
@@ -308,8 +303,8 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                 });
             }
 
+            // Create return PDF for this repayment date+amount
             await handleOpenLoanPDF(true, repayAmountNum, repayDate);
-            setRepayAmount('');
         } finally {
             setIsRepaying(false);
         }
@@ -477,7 +472,7 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                                     >
                                         <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF ขอยืม
                                     </button>
-                                    {latestRepayment && (
+                                    {hasReturnHistory && (
                                         <button
                                             onClick={() => handleOpenLoanPDF(true)}
                                             className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 flex items-center justify-center gap-1"
@@ -487,40 +482,42 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                                     )}
                                 </div>
 
-                                <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-3 space-y-2">
-                                    <p className="text-xs font-semibold text-green-900">ทำเรื่องคืนเงิน</p>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="text-[11px] text-green-800 block mb-1">วันที่คืน</label>
-                                            <input
-                                                type="date"
-                                                value={repayDate}
-                                                onChange={(e) => setRepayDate(e.target.value)}
-                                                className="w-full rounded-lg border border-green-300 px-2 py-1.5 text-sm"
-                                            />
+                                {outstanding > 0 && (
+                                    <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-3 space-y-2">
+                                        <p className="text-xs font-semibold text-green-900">ทำเรื่องคืนเงิน</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="text-[11px] text-green-800 block mb-1">วันที่คืน</label>
+                                                <input
+                                                    type="date"
+                                                    value={repayDate}
+                                                    onChange={(e) => setRepayDate(e.target.value)}
+                                                    className="w-full rounded-lg border border-green-300 px-2 py-1.5 text-sm"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[11px] text-green-800 block mb-1">จำนวนเงินคืน</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={repayAmount}
+                                                    onChange={(e) => setRepayAmount(e.target.value)}
+                                                    className="w-full rounded-lg border border-green-300 px-2 py-1.5 text-sm text-right"
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label className="text-[11px] text-green-800 block mb-1">จำนวนเงินคืน</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                value={repayAmount}
-                                                onChange={(e) => setRepayAmount(e.target.value)}
-                                                className="w-full rounded-lg border border-green-300 px-2 py-1.5 text-sm text-right"
-                                                placeholder="0.00"
-                                            />
-                                        </div>
+                                        <button
+                                            onClick={handleRepay}
+                                            disabled={isRepaying}
+                                            className={`w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 ${!isRepaying ? 'text-green-700 bg-green-100 hover:bg-green-200' : 'text-gray-400 bg-gray-100 cursor-not-allowed'}`}
+                                        >
+                                            <span className="material-symbols-outlined text-base">paid</span>
+                                            {isRepaying ? 'กำลังบันทึกคืนเงิน...' : 'บันทึกคืนเงิน'}
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={handleRepay}
-                                        disabled={isRepaying || outstanding <= 0}
-                                        className={`w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 ${outstanding > 0 && !isRepaying ? 'text-green-700 bg-green-100 hover:bg-green-200' : 'text-gray-400 bg-gray-100 cursor-not-allowed'}`}
-                                    >
-                                        <span className="material-symbols-outlined text-base">paid</span>
-                                        {isRepaying ? 'กำลังบันทึกคืนเงิน...' : (outstanding > 0 ? 'บันทึกคืนเงิน' : 'คืนครบแล้ว')}
-                                    </button>
-                                </div>
+                                )}
                             </div>
                         )}
 
