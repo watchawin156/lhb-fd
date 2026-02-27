@@ -66,6 +66,7 @@ interface SchoolContextType {
   addTransaction: (tx: Transaction) => Promise<void>;
   editTransaction: (id: number, updatedTx: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: number, reason: string) => Promise<void>;
+  repayLoan: (loanId: string, amount: number) => Promise<void>;
   updateSchoolSettings: (settings: Partial<SchoolSettingsData>) => Promise<void>;
   resetData: () => Promise<void>;
   logAction: (action: string, details: string, module: string) => void;
@@ -220,14 +221,184 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAction('อนุมัติรายการ', `เปลี่ยนสถานะรายการ ${id} เป็น ${action === 'approved' ? 'อนุมัติ' : 'ไม่อนุมัติ'}`, 'expenditure');
   };
 
+  // helper to compute current balance of a fund (all transactions up to now)
+  const getFundBalance = (fundType: string) => {
+    return transactions
+      .filter(t => t.fundType === fundType)
+      .reduce((acc, t) => acc + (t.income || 0) - (t.expense || 0), 0);
+  };
+
+  // helper to add to D1 & state without triggering the loan checks again
+  const doAddTransaction = async (tx: Transaction) => {
+    const payload = { ...tx };
+    const saved = await apiFetch('/transactions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    setTransactions(prev => [...prev, { ...payload, id: saved.id }]);
+    logAction('เพิ่มข้อมูล', `หน้า${getFundTitle(payload.fundType)} เพิ่มรายการที่เอกสาร ${payload.docNo || '-'} ยอดเงิน ${payload.income > 0 ? payload.income : payload.expense}`, payload.fundType);
+  };
+
+  const repayLoan = async (loanId: string, amount: number) => {
+    const loan = loans.find(l => l.id === loanId);
+    if (!loan) return;
+    const newReturned = (loan.returnedAmount || 0) + amount;
+    setLoans(prev => prev.map(l => l.id === loanId ? { ...l, returnedAmount: newReturned, status: newReturned >= l.amount ? 'returned' : l.status } : l));
+    logAction('คืนเงินยืม', `คืนเงินสัญญา ${loanId} จำนวน ${amount}`, 'loan');
+
+    // move money back if we know the funds involved
+    if (loan.fromFund && loan.toFund) {
+      try {
+        // expense from the fund that received money
+        await doAddTransaction({
+          id: Date.now(),
+          date: new Date().toISOString().slice(0, 10),
+          docNo: `คืน-${loanId}`,
+          description: `คืนเงินยืม ${loanId}`,
+          fundType: loan.toFund,
+          income: 0,
+          expense: amount,
+          skipLoanCheck: true,
+        });
+        // income to the fund that lent money
+        await doAddTransaction({
+          id: Date.now() + 1,
+          date: new Date().toISOString().slice(0, 10),
+          docNo: `คืน-${loanId}`,
+          description: `คืนเงินยืม ${loanId}`,
+          fundType: loan.fromFund,
+          income: amount,
+          expense: 0,
+          skipLoanCheck: true,
+        });
+      } catch (e) {
+        console.warn('failed to add repayment transactions', e);
+      }
+    }
+
+    // auto-print return document
+    const html = `
+      <html><head><title>หนังสือคืนเงิน ${loanId}</title></head><body>
+      <h1>หนังสือคืนเงินยืม</h1>
+      <p>เลขที่สัญญา: ${loan.id}</p>
+      <p>คืนจำนวน: ${amount.toLocaleString()}</p>
+      <p>จากหมวด: ${loan.toFund || '-'} ไปยัง ${loan.fromFund || '-'}</p>
+      <p>วันที่คืน: ${new Date().toISOString().slice(0,10)}</p>
+      <hr/>
+      <p>ลงชื่อ ...................................</p>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      w.print();
+    }
+  };
+
+  const checkForAutoRepay = (fundType: string) => {
+    const balance = getFundBalance(fundType);
+    const relatedLoans = loans.filter(l => l.toFund === fundType && l.status === 'active');
+    relatedLoans.forEach(l => {
+      const outstanding = l.amount - (l.returnedAmount || 0);
+      if (balance <= 0) return;
+      if (balance >= outstanding) {
+        if (window.confirm(`หมวด ${getFundTitle(fundType)} มีเงินเพียงพอจะแจ้งคืนเงินยืมเลขที่ ${l.id} จำนวน ${outstanding.toLocaleString()} บาทหรือไม่?`)) {
+          repayLoan(l.id, outstanding);
+        }
+      } else {
+        const str = window.prompt(`หมวด ${getFundTitle(fundType)} มีเงินคงเหลือ ${balance.toLocaleString()} บาท\nต้องการคืนเงินสัญญา ${l.id} จำนวนเท่าไร (สูงสุด ${outstanding.toLocaleString()}):`);
+        const amt = parseFloat(str || '0');
+        if (amt > 0) repayLoan(l.id, Math.min(amt, balance));
+      }
+    });
+  };
+
   const addTransaction = async (tx: Transaction) => {
     try {
-      const saved = await apiFetch('/transactions', {
-        method: 'POST',
-        body: JSON.stringify(tx),
-      });
-      setTransactions(prev => [...prev, { ...tx, id: saved.id }]);
-      logAction('เพิ่มข้อมูล', `หน้า${getFundTitle(tx.fundType)} เพิ่มรายการที่เอกสาร ${tx.docNo || '-'} ยอดเงิน ${tx.income > 0 ? tx.income : tx.expense}`, tx.fundType);
+      // auto–loan logic: if this is an expense and the fund doesn't have enough,
+      // borrow from another fund automatically
+      if (!tx.skipLoanCheck && tx.expense && tx.fundType) {
+        const balance = getFundBalance(tx.fundType);
+        if (tx.expense > balance) {
+          const shortfall = tx.expense - balance;
+          // find a donor fund with available funds (largest positive balance)
+          const fundBalances: Record<string, number> = {};
+          transactions.forEach(t => {
+            if (!fundBalances[t.fundType]) fundBalances[t.fundType] = 0;
+            fundBalances[t.fundType] += (t.income || 0) - (t.expense || 0);
+          });
+          let donor: string | undefined;
+          let maxBal = 0;
+          Object.entries(fundBalances).forEach(([ft, bal]) => {
+            if (ft === tx.fundType) return;
+            if (bal >= shortfall && bal > maxBal) {
+              donor = ft;
+              maxBal = bal;
+            }
+          });
+          // if no single fund has enough, pick the one with the highest balance
+          if (!donor) {
+            Object.entries(fundBalances).forEach(([ft, bal]) => {
+              if (ft === tx.fundType) return;
+              if (bal > maxBal) {
+                donor = ft;
+                maxBal = bal;
+              }
+            });
+          }
+
+          if (donor) {
+            const now = new Date().toISOString().slice(0, 10);
+            const loan: LoanContract = {
+              id: `LN-AUTO-${String(loans.length + 1).padStart(3, '0')}`,
+              requester: 'ระบบอัตโนมัติ',
+              project: `ยืมจาก ${getFundTitle(donor)}`,
+              amount: shortfall,
+              dateBorrowed: now,
+              dueDate: now, // could compute later
+              status: 'active',
+              fromFund: donor,
+              toFund: tx.fundType,
+              returnedAmount: 0,
+            };
+            setLoans(prev => [loan, ...prev]);
+            logAction('สร้างสัญญายืม', `ระบบยืมอัตโนมัติ ${shortfall} จาก ${getFundTitle(donor)} เพื่อจ่าย${getFundTitle(tx.fundType)}`, 'loan');
+
+            // record transfer transactions
+            await doAddTransaction({
+              id: Date.now() + 1,
+              date: tx.date,
+              docNo: tx.docNo ? tx.docNo + ' (ยืม)' : '',
+              description: `ยืมให้ ${getFundTitle(tx.fundType)}`,
+              fundType: donor,
+              income: 0,
+              expense: shortfall,
+              skipLoanCheck: true,
+            });
+            await doAddTransaction({
+              id: Date.now() + 2,
+              date: tx.date,
+              docNo: tx.docNo ? tx.docNo + ' (ยืม)' : '',
+              description: `ยืมจาก ${getFundTitle(donor)}`,
+              fundType: tx.fundType,
+              income: shortfall,
+              expense: 0,
+              skipLoanCheck: true,
+            });
+          } else {
+            alert(`ไม่พบหมวดเงินอื่นที่สามารถยืมมาได้ จึงจะบันทึกยอดติดลบใน ${getFundTitle(tx.fundType)}`);
+          }
+        }
+      }
+
+      // finally add the requested transaction
+      await doAddTransaction(tx);
+
+      // check if this income triggers a repay opportunity
+      if (tx.income && tx.fundType) {
+        checkForAutoRepay(tx.fundType);
+      }
     } catch (e: any) {
       console.error('addTransaction failed', e);
       throw e;
@@ -236,14 +407,104 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const editTransaction = async (id: number, updatedTx: Partial<Transaction>) => {
     const tx = transactions.find(t => t.id === id);
-    const merged = { ...tx, ...updatedTx };
+    const merged = { ...tx, ...updatedTx } as Transaction;
+
+    // before saving, check for insufficient balance if expense increases or fundType changes
+    if (merged.expense && merged.fundType) {
+      const otherTxs = transactions.filter(t => t.id !== id && t.fundType === merged.fundType);
+      const bal = otherTxs.reduce((acc, t) => acc + (t.income || 0) - (t.expense || 0), 0);
+      if (merged.expense > bal) {
+        const shortfall = merged.expense - bal;
+        // same donor selection logic as addTransaction
+        const fundBalances: Record<string, number> = {};
+        transactions.forEach(t => {
+          if (!fundBalances[t.fundType]) fundBalances[t.fundType] = 0;
+          fundBalances[t.fundType] += (t.income || 0) - (t.expense || 0);
+        });
+        let donor: string | undefined;
+        let maxBal = 0;
+        Object.entries(fundBalances).forEach(([ft, bal2]) => {
+          if (ft === merged.fundType) return;
+          if (bal2 >= shortfall && bal2 > maxBal) {
+            donor = ft;
+            maxBal = bal2;
+          }
+        });
+        if (!donor) {
+          Object.entries(fundBalances).forEach(([ft, bal2]) => {
+            if (ft === merged.fundType) return;
+            if (bal2 > maxBal) {
+              donor = ft;
+              maxBal = bal2;
+            }
+          });
+        }
+        if (donor) {
+          const now = new Date().toISOString().slice(0, 10);
+          const loan: LoanContract = {
+            id: `LN-AUTO-${String(loans.length + 1).padStart(3, '0')}`,
+            requester: 'ระบบอัตโนมัติ',
+            project: `ยืมจาก ${getFundTitle(donor)}`,
+            amount: shortfall,
+            dateBorrowed: now,
+            dueDate: now,
+            status: 'active',
+            fromFund: donor,
+            toFund: merged.fundType,
+            returnedAmount: 0,
+          };
+          setLoans(prev => [loan, ...prev]);
+          logAction('สร้างสัญญายืม', `ระบบยืมอัตโนมัติ ${shortfall} จาก ${getFundTitle(donor)} เพื่อจ่าย${getFundTitle(merged.fundType)}`, 'loan');
+          await doAddTransaction({
+            id: Date.now() + 1,
+            date: merged.date,
+            docNo: merged.docNo ? merged.docNo + ' (ยืม)' : '',
+            description: `ยืมให้ ${getFundTitle(merged.fundType)}`,
+            fundType: donor,
+            income: 0,
+            expense: shortfall,
+            skipLoanCheck: true,
+          });
+          await doAddTransaction({
+            id: Date.now() + 2,
+            date: merged.date,
+            docNo: merged.docNo ? merged.docNo + ' (ยืม)' : '',
+            description: `ยืมจาก ${getFundTitle(donor)}`,
+            fundType: merged.fundType,
+            income: shortfall,
+            expense: 0,
+            skipLoanCheck: true,
+          });
+        } else {
+          alert(`ไม่พบหมวดเงินอื่นที่สามารถยืมมาได้ จึงจะบันทึกยอดติดลบใน ${getFundTitle(merged.fundType)}`);
+        }
+      }
+    }
+
     try {
       await apiFetch(`/transactions/${id}`, {
         method: 'PUT',
         body: JSON.stringify(merged),
       });
-      setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updatedTx } : t));
-      logAction('แก้ไขข้อมูล', `หน้า${tx ? getFundTitle(tx.fundType) : 'บัญชีงบประมาณ'} แก้ไขรายการที่เอกสาร ${updatedTx.docNo || tx?.docNo || '-'}`, tx?.fundType || 'dashboard');
+
+      const changes: string[] = [];
+      if (tx) {
+        if (tx.description !== merged.description) changes.push(`ชื่อรายการจาก "${tx.description}" เป็น "${merged.description}"`);
+        if (tx.docNo !== merged.docNo) changes.push(`ที่เอกสารจาก "${tx.docNo || '-'}" เป็น "${merged.docNo || '-'}"`);
+        if (tx.income !== merged.income) changes.push(`รายรับจาก ${tx.income} เป็น ${merged.income}`);
+        if (tx.expense !== merged.expense) changes.push(`รายจ่ายจาก ${tx.expense} เป็น ${merged.expense}`);
+        if (tx.fundType !== merged.fundType) changes.push(`หมวดเงินจาก ${tx.fundType} เป็น ${merged.fundType}`);
+        if (tx.payer !== merged.payer) changes.push(`ผู้จ่ายจาก "${tx.payer || '-'}" เป็น "${merged.payer || '-'}"`);
+        if (tx.payee !== merged.payee) changes.push(`ผู้รับจาก "${tx.payee || '-'}" เป็น "${merged.payee || '-'}"`);
+      }
+      const changeStr = changes.length > 0 ? ` (เปลี่ยน: ${changes.join(', ')})` : '';
+
+      setTransactions(prev => prev.map(t => t.id === id ? merged : t));
+      logAction('แก้ไขข้อมูล', `หน้า${tx ? getFundTitle(tx.fundType) : 'บัญชีงบประมาณ'} แก้ไขรายการที่เอกสาร ${updatedTx.docNo || tx?.docNo || '-'} ${changeStr}`, tx?.fundType || 'dashboard');
+
+      if (merged.income && merged.fundType) {
+        checkForAutoRepay(merged.fundType);
+      }
     } catch (e: any) {
       console.error('editTransaction failed', e);
       throw e;
@@ -306,6 +567,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       addTransaction,
       editTransaction,
       deleteTransaction,
+      repayLoan,
       updateSchoolSettings,
       resetData,
       logAction,

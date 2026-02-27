@@ -7,7 +7,8 @@ interface Env {
 }
 
 const TELEGRAM_BOT_TOKEN = '8505492579:AAHWRjIcdINKMetnp1bKcXt0xecVSoChSr8';
-const TELEGRAM_CHAT_ID = '-1002301809285';
+const TELEGRAM_CHAT_ID = '-1003201809285';
+const TELEGRAM_THREAD_ID = '7637';
 
 export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
     try {
@@ -24,6 +25,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
         // ส่งไป Telegram
         const tgForm = new FormData();
         tgForm.append('chat_id', TELEGRAM_CHAT_ID);
+        tgForm.append('message_thread_id', TELEGRAM_THREAD_ID);
         tgForm.append('caption', caption);
         tgForm.append('document', file, filename);
 

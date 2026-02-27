@@ -65,6 +65,11 @@ export interface LoanContract {
   dateBorrowed: string;
   dueDate: string;
   status: 'active' | 'overdue' | 'returned';
+  // optional bookkeeping so we know which fund lent money and which fund received it
+  fromFund?: string;
+  toFund?: string;
+  // how much of the original amount has been returned so far
+  returnedAmount?: number;
 }
 
 export interface PRItem {
@@ -87,6 +92,13 @@ export interface Transaction {
   recipientType?: 'individual' | 'juristic'; // For Tax calc
   bankId?: string; // Links transaction to specific bank account
   incomeRefId?: number; // Linking an expense back to its source income
+  // If this transaction is part of a loan (either the borrow or the repayment)
+  // this field holds the corresponding LoanContract.id so we can show action
+  // buttons in the register and print proper documents.
+  loanId?: string;
+  // used internally to prevent auto-loan/repeat logic when we are generating adjunct
+  // entries such as transfers created by the loan system
+  skipLoanCheck?: boolean;
 }
 
 export interface BankAccount {

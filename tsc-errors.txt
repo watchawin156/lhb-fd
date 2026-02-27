@@ -1,0 +1,27 @@
+components/DailyReport.tsx(320,36): error TS2304: Cannot find name 'เงินรายได้สถานศึกษา'.
+components/ExportReport.tsx(187,21): error TS2554: Expected 6 arguments, but got 13.
+functions/api/_middleware.ts(4,25): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/audit-logs.ts(6,9): error TS2552: Cannot find name 'D1Database'. Did you mean 'IDBDatabase'?
+functions/api/audit-logs.ts(9,28): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/audit-logs.ts(30,29): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/audit-logs.ts(55,31): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/audit-logs.ts(65,32): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/backup.ts(7,9): error TS2552: Cannot find name 'D1Database'. Did you mean 'IDBDatabase'?
+functions/api/backup.ts(148,29): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/backup.ts(273,28): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/backup.ts(293,28): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/backup.ts(336,32): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/settings.ts(6,9): error TS2304: Cannot find name 'D1Database'.
+functions/api/settings.ts(9,28): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/settings.ts(29,29): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/settings.ts(62,32): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/telegram-send.ts(12,29): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/telegram-send.ts(46,32): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/transactions.ts(6,9): error TS2304: Cannot find name 'D1Database'.
+functions/api/transactions.ts(27,28): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/transactions.ts(38,29): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/transactions.ts(72,32): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/transactions/[id].ts(6,9): error TS2304: Cannot find name 'D1Database'.
+functions/api/transactions/[id].ts(9,28): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/transactions/[id].ts(48,31): error TS2304: Cannot find name 'PagesFunction'.
+functions/api/transactions/[id].ts(58,32): error TS2304: Cannot find name 'PagesFunction'.

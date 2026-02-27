@@ -25,5 +25,20 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": [
+    "src",
+    "components",
+    "functions",
+    "utils",
+    "utils.ts",
+    "types.ts",
+    "*.ts",
+    "*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"
+  ]
 }

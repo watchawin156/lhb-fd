@@ -62,7 +62,7 @@ const ExportReport: React.FC = () => {
         const eef = getBalance(['fund-eef'], d);
         const lunch = getBalance(['fund-lunch'], d);
         const lunchInt = getBalance(['fund-state-lunch-interest'], d);
-        const subsidy = getBalance(['fund-subsidy'], d);
+        const subsidy = getBalance(['fund-subsidy', 'fund-subsidy-utility'], d);
         const book = getBalance(['fund-15y-book'], d);
         const supply = getBalance(['fund-15y-supply'], d);
         const uniform = getBalance(['fund-15y-uniform'], d);
@@ -181,9 +181,28 @@ const ExportReport: React.FC = () => {
                 openBlob(bytes);
             } else if (id === 'cashbook') {
                 const { fyBE, receipts, payments, prevCash, yodYokPai, totalRec, totalPay, accRec, accPay, bookNo } = cashBookData;
-                const bytes = await buildCashBookPDF(bookNo, fyBE, receipts, payments, prevCash, yodYokPai,
-                    totalRec, totalPay, accRec, accPay,
-                    schoolSettings.financeOfficerName, schoolSettings.auditorName, schoolSettings.directorName);
+
+                // Pack monthly sum into a single dailyData representation
+                const [yrStr, monStr] = selectedMonth.split('-');
+                const mon = parseInt(monStr);
+                const monthName = THAI_MONTHS_FULL[mon - 1];
+
+                const dailyData = [{
+                    dateStr: `เดือน ${monthName}`,
+                    receipts,
+                    payments,
+                    prevCash,
+                    yodYokPai,
+                    totalRec,
+                    totalPay,
+                    accRec,
+                    accPay
+                }];
+
+                const bytes = await buildCashBookPDF(
+                    bookNo, fyBE, dailyData,
+                    schoolSettings.financeOfficerName, schoolSettings.auditorName, schoolSettings.directorName
+                );
                 openBlob(bytes);
             }
         } catch (err) {

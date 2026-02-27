@@ -506,15 +506,24 @@ export async function buildCashBookPDF(
             }
         }
 
-        // Summary Rows
-        dayLeft.push({}); // Spacer for total
-        dayLeft.push({ labelOnly: 'รวมรับ', bold: true, cash: day.totalRec.cash, budget: day.totalRec.budget, revenue: day.totalRec.revenue, nonBudget: day.totalRec.nonBudget });
-        dayLeft.push({ labelOnly: 'รวมตั้งแต่ต้นปี', bold: true, cash: day.accRec.cash, budget: day.accRec.budget, revenue: day.accRec.revenue, nonBudget: day.accRec.nonBudget });
+        // === Summary Rows ===
+        // ฝั่งรับ: รวมรับ → รวมตั้งแต่ต้นปี (ยอดยกมา + รายรับวันนั้น)
+        const ytdRec = {
+            cash: day.prevCash + day.totalRec.cash,
+            budget: (day.totalRec.budget || 0),
+            revenue: (day.totalRec.revenue || 0),
+            nonBudget: day.prevCash + (day.totalRec.nonBudget || 0),
+        };
 
-        // ฝั่งจ่าย: spacer, รวมจ่าย, ยอดยกไป (ไม่เอารวมตั้งแต่ต้นปี)
-        dayRight.push({});
+        dayLeft.push({}); // Spacer
+        dayLeft.push({ labelOnly: 'รวมรับ', bold: true, cash: day.totalRec.cash, budget: day.totalRec.budget, revenue: day.totalRec.revenue, nonBudget: day.totalRec.nonBudget });
+        dayLeft.push({ labelOnly: 'รวมตั้งแต่ต้นปี', bold: true, cash: ytdRec.cash, budget: ytdRec.budget, revenue: ytdRec.revenue, nonBudget: ytdRec.nonBudget });
+
+        // ฝั่งจ่าย: รวมจ่าย → ยอดยกไป (ไม่มี "รวมตั้งแต่ต้นปี")
+        dayRight.push({}); // Spacer
         dayRight.push({ labelOnly: 'รวมจ่าย', bold: true, cash: day.totalPay.cash, budget: day.totalPay.budget, revenue: day.totalPay.revenue, nonBudget: day.totalPay.nonBudget });
         dayRight.push({ labelOnly: 'ยอดยกไป', bold: true, cash: day.yodYokPai, budget: null, revenue: null, nonBudget: day.yodYokPai });
+
 
         dayGroups.push({ leftRows: dayLeft, rightRows: dayRight });
     });

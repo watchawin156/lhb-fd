@@ -4,6 +4,7 @@ import { useSchoolData } from '../context/SchoolContext';
 
 interface HeaderProps {
   onMenuToggle?: () => void;
+  onSearchItemClick?: (txId: number) => void;
 }
 
 const fmtMoney = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -14,7 +15,7 @@ const fmtShort = (dateStr: string) => {
   return `${d.getDate()} ${thMonths[d.getMonth()]} ${d.getFullYear() + 543}`;
 };
 
-const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
+const Header: React.FC<HeaderProps> = ({ onMenuToggle, onSearchItemClick }) => {
   const { transactions } = useSchoolData();
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -73,7 +74,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
   }, [searchTerm, transactions]);
 
   return (
-    <header className="h-16 bg-surface dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-6 sticky top-0 z-10 shrink-0 shadow-sm/50 transition-colors">
+    <header className="h-16 bg-surface dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-6 sticky top-0 z-[60] shrink-0 shadow-sm/50 transition-colors">
       <div className="flex items-center gap-4 md:hidden">
         <button onClick={onMenuToggle} className="p-2 -ml-2 text-text-muted dark:text-text-muted-dark hover:text-primary transition-colors">
           <span className="material-symbols-outlined">menu</span>
@@ -88,7 +89,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
 
       <div className="flex items-center gap-4">
         {/* Search */}
-        <div className="relative w-64 hidden md:block z-50" ref={searchRef}>
+        <div className="relative w-64 hidden md:block z-[60]" ref={searchRef}>
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-muted dark:text-text-muted-dark">
             <span className="material-symbols-outlined text-[18px]">search</span>
           </span>
@@ -102,7 +103,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
           />
           {/* Search Dropdown */}
           {isSearchOpen && searchTerm && (
-            <div className="absolute top-10 right-0 w-80 max-h-96 overflow-y-auto bg-white dark:bg-surface-dark rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50">
+            <div className="absolute top-10 right-0 w-80 max-h-96 overflow-y-auto bg-white dark:bg-surface-dark rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-[60]">
               <div className="p-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
                 <span className="text-xs font-semibold text-gray-500">
                   ผลการค้นหา {searchResults.length} {searchResults.length === 10 ? ' (แสดงสูงสุด 10 รายการ)' : 'รายการ'}
@@ -116,7 +117,10 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
                   <div className="p-4 text-center text-sm text-gray-500">ไม่พบรายการที่ตรงกับ "{searchTerm}"</div>
                 ) : (
                   searchResults.map((t: any) => (
-                    <div key={t.id} className="p-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer transition-colors text-left group">
+                    <div key={t.id} onClick={() => {
+                      if (onSearchItemClick) onSearchItemClick(t.id);
+                      setIsSearchOpen(false);
+                    }} className="p-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer transition-colors text-left group">
                       <div className="flex justify-between items-start mb-1">
                         <span className="font-medium text-sm text-gray-800 dark:text-gray-200 line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{t.description}</span>
                         <span className={`text-sm font-bold whitespace-nowrap ml-2 ${t.income ? 'text-green-600' : 'text-red-600'}`}>

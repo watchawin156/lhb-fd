@@ -10,7 +10,8 @@ interface Env {
 }
 
 const TELEGRAM_BOT_TOKEN = '8505492579:AAHWRjIcdINKMetnp1bKcXt0xecVSoChSr8';
-const TELEGRAM_CHAT_ID = '-1002301809285';
+const TELEGRAM_CHAT_ID = '-1003201809285';
+const TELEGRAM_THREAD_ID = '7637';
 
 // ─── CRC32 ────────────────────────────────────────────────────────────────────
 const CRC32_TABLE = (() => {
@@ -245,6 +246,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
         // ส่ง Telegram
         const formData = new FormData();
         formData.append('chat_id', TELEGRAM_CHAT_ID);
+        formData.append('message_thread_id', TELEGRAM_THREAD_ID);
         formData.append('caption',
             `📦 สำรองข้อมูล ${schoolName}\n🗓 ${thaiDate}\n📊 ${transactions.length} รายการ\n\n📁 ประกอบด้วย:\n• backup.json (Restore ผ่าน UI)\n• backup.sql (Restore ผ่าน wrangler)\n• CSV แยกปีงบ ${Object.keys(byFyFund).join(', ')}`
         );

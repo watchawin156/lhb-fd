@@ -25,13 +25,14 @@ export const generateDailyReportPDF = async (reportDate: string, schoolSettings:
     const totalLunchAccount = lunchFundBalance + lunchInterestBalance;
 
     const subsidyHeadBalance = getBalance(['fund-subsidy']);
+    const utilityBalance = getBalance(['fund-subsidy-utility']);
     const bookBalance = getBalance(['fund-15y-book']);
     const supplyBalance = getBalance(['fund-15y-supply']);
     const uniformBalance = getBalance(['fund-15y-uniform']);
     const activityBalance = getBalance(['fund-15y-activity']);
     const poorBalance = getBalance(['fund-poor']);
     const subsidyInterestBalance = getBalance(['fund-state-subsidy-interest']);
-    const totalSubsidyAccount = subsidyHeadBalance + bookBalance + supplyBalance + uniformBalance + activityBalance + poorBalance + subsidyInterestBalance;
+    const totalSubsidyAccount = subsidyHeadBalance + utilityBalance + bookBalance + supplyBalance + uniformBalance + activityBalance + poorBalance + subsidyInterestBalance;
     const schoolIncomeBalance = getBalance(['fund-school-income']);
 
     const reportData = [
@@ -267,13 +268,14 @@ const DailyReport: React.FC<DailyReportProps> = ({ initialDate }) => {
     const totalLunchAccount = lunchFundBalance + lunchInterestBalance;
 
     const subsidyHeadBalance = getBalance(['fund-subsidy']);
+    const utilityBalance = getBalance(['fund-subsidy-utility']);
     const bookBalance = getBalance(['fund-15y-book']);
     const supplyBalance = getBalance(['fund-15y-supply']);
     const uniformBalance = getBalance(['fund-15y-uniform']);
     const activityBalance = getBalance(['fund-15y-activity']);
     const poorBalance = getBalance(['fund-poor']);
     const subsidyInterestBalance = getBalance(['fund-state-subsidy-interest']);
-    const totalSubsidyAccount = subsidyHeadBalance + bookBalance + supplyBalance + uniformBalance + activityBalance + poorBalance + subsidyInterestBalance;
+    const totalSubsidyAccount = subsidyHeadBalance + utilityBalance + bookBalance + supplyBalance + uniformBalance + activityBalance + poorBalance + subsidyInterestBalance;
     const schoolIncomeBalance = getBalance(['fund-school-income']);
 
     const reportData = [
@@ -311,6 +313,10 @@ const DailyReport: React.FC<DailyReportProps> = ({ initialDate }) => {
         if (amount === 0) return { baht: "-", satang: "-" };
         const parts = amount.toFixed(2).split('.');
         return { baht: parseInt(parts[0]).toLocaleString(), satang: parts[1] };
+    };
+
+    const handlePrintPDF = () => {
+        generateDailyReportPDF(reportDate, schoolSettings, transactions);
     };
 
     return (

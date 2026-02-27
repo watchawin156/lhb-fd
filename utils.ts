@@ -1,6 +1,7 @@
 export const FUND_TYPE_OPTIONS = [
   // เงินงบประมาณ
   { value: 'fund-subsidy', label: 'เงินอุดหนุนรายหัว', group: 'เงินงบประมาณ' },
+
   { value: 'fund-15y-book', label: 'เงินเรียนฟรี 15 ปี - หนังสือเรียน', group: 'เงินงบประมาณ' },
   { value: 'fund-15y-supply', label: 'เงินเรียนฟรี 15 ปี - อุปกรณ์การเรียน', group: 'เงินงบประมาณ' },
   { value: 'fund-15y-uniform', label: 'เงินเรียนฟรี 15 ปี - เครื่องแบบนักเรียน', group: 'เงินงบประมาณ' },
@@ -16,6 +17,8 @@ export const FUND_TYPE_OPTIONS = [
   { value: 'fund-school-income', label: 'เงินรายได้สถานศึกษา', group: 'เงินนอกงบประมาณ' },
 
   { value: 'fund-tax', label: 'เงินภาษี 1%', group: 'เงินนอกงบประมาณ' },
+  // for keeping miscellaneous receipts (used only when needed)
+  { value: 'fund-safekeeping', label: 'บันทึกการรับเงินเพื่อเก็บรักษา', group: 'เงินนอกงบประมาณ' },
 ];
 
 export const formatThaiDate = (dateInput: string | Date | undefined | null): string => {

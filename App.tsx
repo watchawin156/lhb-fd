@@ -15,6 +15,7 @@ import CashBookReport from './components/CashBookReport';
 import ExportReport from './components/ExportReport';
 import SystemSettings from './components/SystemSettings';
 import SchoolProjects from './components/SchoolProjects';
+import CashBookDetailModal from './components/cashbook/CashBookDetailModal';
 import { SchoolProvider } from './context/SchoolContext';
 
 const getCurrentFiscalYear = () => {
@@ -31,6 +32,7 @@ const App: React.FC = () => {
   const [activePage, setActivePage] = useState<string>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedFiscalYear, setSelectedFiscalYear] = useState(getCurrentFiscalYear());
+  const [viewedTxId, setViewedTxId] = useState<number | string | null>(null);
 
   const handleLogin = (role: string) => {
     setUserRole(role);
@@ -117,8 +119,16 @@ const App: React.FC = () => {
         <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
           <Header
             onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+            onSearchItemClick={(id) => setViewedTxId(id)}
           />
           {renderMainContent()}
+          {viewedTxId !== null && (
+            <CashBookDetailModal
+              isOpen={viewedTxId !== null}
+              onClose={() => setViewedTxId(null)}
+              txId={viewedTxId}
+            />
+          )}
         </main>
       </div>
     </SchoolProvider>

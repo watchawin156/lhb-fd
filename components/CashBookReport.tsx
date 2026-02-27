@@ -3,6 +3,10 @@ import React, { useState, useMemo } from 'react';
 import { useSchoolData } from '../context/SchoolContext';
 import { buildCashBookPDF, buildCoverPDF, openBlob } from './exportReportBuilders';
 import { generateDailyReportPDF } from './DailyReport';
+import CashBookAddModal from './cashbook/CashBookAddModal';
+import CashBookCarryForwardModal from './cashbook/CashBookCarryForwardModal';
+import CashBookCheckModal from './cashbook/CashBookCheckModal';
+import BorrowModal from './cashbook/BorrowModal';
 import ThaiDatePicker from './ThaiDatePicker';
 import { FUND_TYPE_OPTIONS } from '../utils';
 
@@ -75,105 +79,16 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
 
     // Add transaction modal - multi-item support
     const [isAddOpen, setIsAddOpen] = useState(false);
-    const [addTransactionType, setAddTransactionType] = useState<'income' | 'expense'>('income');
-
-    // Shared header fields
-    const [addDate, setAddDate] = useState(new Date().toISOString().slice(0, 10));
-    const [addFundType, setAddFundType] = useState('fund-subsidy');
-    const [addFundSearch, setAddFundSearch] = useState('');
-    const [isFundDropdownOpen, setIsFundDropdownOpen] = useState(false);
-    const [addDocNo, setAddDocNo] = useState('');
-    const [addBankId, setAddBankId] = useState<string>('');
-
-    // Sub-items: description + amount (empty amount = header row)
-    interface SubItem { id: number; description: string; amount: string; }
-    const createSubItem = (): SubItem => ({ id: Date.now() + Math.random(), description: '', amount: '' });
-    const [subItems, setSubItems] = useState<SubItem[]>([createSubItem()]);
-
-    // Payee info for expense
-    const [addPayeeType, setAddPayeeType] = useState<'legal' | 'person' | null>(null);
+    const [initialAddType, setInitialAddType] = useState<'income' | 'expense'>('income');
     const [showTaxWarning, setShowTaxWarning] = useState(false);
     const [taxWarningAmount, setTaxWarningAmount] = useState(0);
     const [taxWarningPayeeType, setTaxWarningPayeeType] = useState<'legal' | 'person' | null>(null);
 
-    // Selected tax income transaction (for fund-tax expense)
-    const [selectedTaxIncomeId, setSelectedTaxIncomeId] = useState<number | null>(null);
+    // Check Modal
+    const [isCheckModalOpen, setIsCheckModalOpen] = useState(false);
 
-    // Tax 1% income mode - simple input
-    const [taxPayerName, setTaxPayerName] = useState('');
-    const [taxAmount, setTaxAmount] = useState('');
-
-    // Tax 1% expense - manual mode (when no income records e.g. carry forward)
-    const [isTaxManualMode, setIsTaxManualMode] = useState(false);
-    const [taxManualDesc, setTaxManualDesc] = useState('');
-    const [taxManualAmount, setTaxManualAmount] = useState('');
-
-    // Selected poor fund income transaction (for fund-poor expense)
-    const [selectedPoorIncomeId, setSelectedPoorIncomeId] = useState<number | null>(null);
-
-    // Get income transactions of fund-tax type for selection
-    const taxIncomeTransactions = useMemo(() => {
-        return transactions
-            .filter((t: any) => t.fundType === 'fund-tax' && (t.income || 0) > 0)
-            .map((t: any) => {
-                const spent = transactions
-                    .filter((exp: any) => exp.fundType === 'fund-tax' && (exp.incomeRefId === t.id || (!exp.incomeRefId && exp.description === `นำส่งภาษี 1% (${t.description || t.payer || 'ไม่ระบุ'})`)))
-                    .reduce((sum: number, exp: any) => sum + (exp.expense || 0), 0);
-                return { ...t, remaining: (t.income || 0) - spent };
-            })
-            .filter((t: any) => t.remaining > 0)
-            .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [transactions]);
-
-    // Get income transactions of fund-poor type for selection
-    const poorIncomeTransactions = useMemo(() => {
-        return transactions
-            .filter((t: any) => t.fundType === 'fund-poor' && (t.income || 0) > 0)
-            .map((t: any) => {
-                const spent = transactions
-                    .filter((exp: any) => exp.fundType === 'fund-poor' && (exp.incomeRefId === t.id || (!exp.incomeRefId && t.description && exp.description.includes(t.description))))
-                    .reduce((sum: number, exp: any) => sum + (exp.expense || 0), 0);
-                return { ...t, remaining: (t.income || 0) - spent };
-            })
-            .filter((t: any) => t.remaining > 0)
-            .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [transactions]);
-
-    // Get income transactions of fund-state type for selection (เงินรายได้แผ่นดิน - ดอกเบี้ย)
-    const stateIncomeTransactions = useMemo(() => {
-        return transactions
-            .filter((t: any) => t.fundType === 'fund-state' && (t.income || 0) > 0)
-            .map((t: any) => {
-                const spent = transactions
-                    .filter((exp: any) => exp.fundType === 'fund-state' && (exp.incomeRefId === t.id || (!exp.incomeRefId && exp.description === `ส่งดอกเบี้ย (${t.description || 'เงินรายได้แผ่นดิน'})`)))
-                    .reduce((sum: number, exp: any) => sum + (exp.expense || 0), 0);
-                return { ...t, remaining: (t.income || 0) - spent };
-            })
-            .filter((t: any) => t.remaining > 0)
-            .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [transactions]);
-
-    // Get income transactions of fund-eef type for selection (กสศ.)
-    const eefIncomeTransactions = useMemo(() => {
-        return transactions
-            .filter((t: any) => t.fundType === 'fund-eef' && (t.income || 0) > 0)
-            .map((t: any) => {
-                const spent = transactions
-                    .filter((exp: any) => exp.fundType === 'fund-eef' && (exp.incomeRefId === t.id || (!exp.incomeRefId && t.description && exp.description.includes(t.description))))
-                    .reduce((sum: number, exp: any) => sum + (exp.expense || 0), 0);
-                return { ...t, remaining: (t.income || 0) - spent };
-            })
-            .filter((t: any) => t.remaining > 0)
-            .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [transactions]);
-    const [selectedEefIncomeId, setSelectedEefIncomeId] = useState<number | null>(null);
-    const [customExpenseAmount, setCustomExpenseAmount] = useState(''); // จำนวนเงินที่จ่ายจริง (กรอกเอง)
-
-    // fund-state expense mode states
-    const [isStateManualMode, setIsStateManualMode] = useState(false);
-    const [stateManualDesc, setStateManualDesc] = useState('');
-    const [stateManualAmount, setStateManualAmount] = useState('');
-    const [selectedStateIncomeId, setSelectedStateIncomeId] = useState<number | null>(null);
+    // Borrow Modal
+    const [isBorrowModalOpen, setIsBorrowModalOpen] = useState(false);
 
     // Carry Forward Modal
     const [isCarryForwardOpen, setIsCarryForwardOpen] = useState(false);
@@ -185,399 +100,6 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
     const [cashBookFilter, setCashBookFilter] = useState<string>('all');
     const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
     const [pdfDateRange, setPdfDateRange] = useState(''); // e.g. "1/5/2568-9/5/2568"
-
-    const updateSub = (id: number, field: 'description' | 'amount', value: string) => {
-        setSubItems(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
-    };
-    const addSubItem = () => setSubItems(prev => [...prev, createSubItem()]);
-    const removeSubItem = (id: number) => {
-        if (subItems.length <= 1) return;
-        setSubItems(prev => prev.filter(s => s.id !== id));
-    };
-
-    const subTotal = subItems.reduce((sum, s) => {
-        const v = parseFloat(s.amount);
-        return sum + (isNaN(v) ? 0 : v);
-    }, 0);
-
-    const handleAddSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        const isTaxMode = addFundType === 'fund-tax';
-        const isPoorExpense = addFundType === 'fund-poor' && addTransactionType === 'expense';
-        const isStateExpense = addFundType === 'fund-state' && addTransactionType === 'expense';
-        const isEefExpense = addFundType === 'fund-eef' && addTransactionType === 'expense';
-
-        // === โหมดภาษี 1% ===
-        if (isTaxMode) {
-            if (!addDocNo) {
-                alert('กรุณากรอกที่เอกสาร');
-                return;
-            }
-
-            if (addTransactionType === 'income') {
-                // รับเงินภาษี 1%: กรอกชื่อร้าน + จำนวนเงิน
-                const amt = parseFloat(taxAmount);
-                if (!taxPayerName || isNaN(amt) || amt <= 0) {
-                    alert('กรุณากรอกชื่อผู้จ่าย (ร้านค้า) และจำนวนเงิน');
-                    return;
-                }
-                addTransaction({
-                    id: Date.now(),
-                    date: addDate,
-                    docNo: addDocNo,
-                    description: `รับเงินภาษี 1% จาก${taxPayerName}`,
-                    fundType: 'fund-tax',
-                    income: amt,
-                    expense: 0,
-                    payer: taxPayerName,
-                    payee: '',
-                });
-            } else {
-                // จ่ายเงินภาษี 1%
-                if (isTaxManualMode) {
-                    // โหมดกรอกเอง (เช่น ยอดยกมา)
-                    const amt = parseFloat(taxManualAmount);
-                    if (!taxManualDesc || isNaN(amt) || amt <= 0) {
-                        alert('กรุณากรอกรายละเอียดและจำนวนเงิน');
-                        return;
-                    }
-                    const fundBalance = transactions
-                        .filter((t: any) => t.fundType === 'fund-tax' && t.date <= addDate)
-                        .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
-                    if (amt > fundBalance) {
-                        alert(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือภาษี (${fmtMoney(fundBalance)} บาท)`);
-                        return;
-                    }
-                    addTransaction({
-                        id: Date.now(),
-                        date: addDate,
-                        docNo: addDocNo,
-                        description: `นำส่งภาษี 1% (${taxManualDesc})`,
-                        fundType: 'fund-tax',
-                        income: 0,
-                        expense: amt,
-                        payer: '',
-                        payee: taxManualDesc,
-                    });
-                } else {
-                    // โหมดเลือกจากรายการรายรับ
-                    if (!selectedTaxIncomeId) {
-                        alert('กรุณาเลือกรายการรายรับภาษี 1% ที่ต้องการจ่าย');
-                        return;
-                    }
-                    const selectedTx = taxIncomeTransactions.find((t: any) => t.id === selectedTaxIncomeId);
-                    if (!selectedTx) {
-                        alert('ไม่พบรายการที่เลือก');
-                        return;
-                    }
-                    const fundBalance = transactions
-                        .filter((t: any) => t.fundType === 'fund-tax' && t.date <= addDate)
-                        .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
-                    if (selectedTx.income > fundBalance) {
-                        alert(`ยอด ${fmtMoney(selectedTx.income)} บาท เกินยอดคงเหลือภาษี (${fmtMoney(fundBalance)} บาท)`);
-                        return;
-                    }
-                    addTransaction({
-                        id: Date.now(),
-                        date: addDate,
-                        docNo: addDocNo,
-                        description: `นำส่งภาษี 1% (${selectedTx.description || selectedTx.payer || 'ไม่ระบุ'})`,
-                        fundType: 'fund-tax',
-                        income: 0,
-                        expense: selectedTx.income,
-                        payer: '',
-                        payee: selectedTx.payer || selectedTx.description || '',
-                        incomeRefId: selectedTx.id,
-                    });
-                }
-            }
-
-            setIsAddOpen(false);
-            setSubItems([createSubItem()]);
-            setAddDate(new Date().toISOString().slice(0, 10));
-            setAddDocNo('');
-            setAddPayeeType(null);
-            setSelectedTaxIncomeId(null);
-            setSelectedPoorIncomeId(null);
-            setTaxPayerName('');
-            setTaxAmount('');
-            setIsTaxManualMode(false);
-            setTaxManualDesc('');
-            setTaxManualAmount('');
-            setAddFundSearch('');
-            setAddBankId('');
-            return;
-        }
-
-        // === โหมดเงินปัจจัยพื้นฐานนักเรียนยากจน - จ่าย ===
-        if (isPoorExpense) {
-            if (!addDocNo) {
-                alert('กรุณากรอกที่เอกสาร');
-                return;
-            }
-            if (!selectedPoorIncomeId) {
-                alert('กรุณาเลือกรายการรายรับปัจจัยยากจนที่ต้องการจ่าย');
-                return;
-            }
-            const selectedTx = poorIncomeTransactions.find((t: any) => t.id === selectedPoorIncomeId);
-            if (!selectedTx) {
-                alert('ไม่พบรายการที่เลือก');
-                return;
-            }
-            const amt = parseFloat(customExpenseAmount);
-            if (isNaN(amt) || amt <= 0) {
-                alert('กรุณากรอกจำนวนเงินที่ต้องการจ่าย');
-                return;
-            }
-            const fundBalance = transactions
-                .filter((t: any) => t.fundType === 'fund-poor' && t.date <= addDate)
-                .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
-            if (amt > fundBalance) {
-                alert(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือปัจจัยยากจน (${fmtMoney(fundBalance)} บาท)`);
-                return;
-            }
-            const baseDesc = selectedTx.description || 'เงินปัจจัยพื้นฐานนักเรียนยากจน';
-            const expenseDesc = baseDesc.startsWith('รับ') ? baseDesc.replace(/^รับ/, 'จ่าย') : `จ่าย${baseDesc}`;
-            addTransaction({
-                id: Date.now(),
-                date: addDate,
-                docNo: addDocNo,
-                description: expenseDesc,
-                fundType: 'fund-poor',
-                income: 0,
-                expense: amt,
-                payer: '',
-                payee: selectedTx.description || selectedTx.payer || '',
-                incomeRefId: selectedTx.id,
-            });
-
-            setIsAddOpen(false);
-            setSubItems([createSubItem()]);
-            setAddDate(new Date().toISOString().slice(0, 10));
-            setAddDocNo('');
-            setAddPayeeType(null);
-            setSelectedTaxIncomeId(null);
-            setSelectedPoorIncomeId(null);
-            setCustomExpenseAmount('');
-            setTaxPayerName('');
-            setTaxAmount('');
-            setAddFundSearch('');
-            setAddBankId('');
-            return;
-        }
-
-        // === โหมดเงิน กสศ. - จ่าย ===
-        if (isEefExpense) {
-            if (!addDocNo) {
-                alert('กรุณากรอกที่เอกสาร');
-                return;
-            }
-            if (!selectedEefIncomeId) {
-                alert('กรุณาเลือกรายการรายรับ กสศ. ที่ต้องการจ่าย');
-                return;
-            }
-            const selectedTx = eefIncomeTransactions.find((t: any) => t.id === selectedEefIncomeId);
-            if (!selectedTx) {
-                alert('ไม่พบรายการที่เลือก');
-                return;
-            }
-            const amt = parseFloat(customExpenseAmount);
-            if (isNaN(amt) || amt <= 0) {
-                alert('กรุณากรอกจำนวนเงินที่ต้องการจ่าย');
-                return;
-            }
-            const fundBalance = transactions
-                .filter((t: any) => t.fundType === 'fund-eef' && t.date <= addDate)
-                .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
-            if (amt > fundBalance) {
-                alert(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือ กสศ. (${fmtMoney(fundBalance)} บาท)`);
-                return;
-            }
-            const baseDesc = selectedTx.description || 'เงิน กสศ.';
-            const expenseDesc = baseDesc.startsWith('รับ') ? baseDesc.replace(/^รับ/, 'จ่าย') : `จ่าย${baseDesc}`;
-            addTransaction({
-                id: Date.now(),
-                date: addDate,
-                docNo: addDocNo,
-                description: expenseDesc,
-                fundType: 'fund-eef',
-                income: 0,
-                expense: amt,
-                payer: '',
-                payee: selectedTx.description || selectedTx.payer || '',
-                incomeRefId: selectedTx.id,
-            });
-
-            setIsAddOpen(false);
-            setSubItems([createSubItem()]);
-            setAddDate(new Date().toISOString().slice(0, 10));
-            setAddDocNo('');
-            setAddPayeeType(null);
-            setSelectedEefIncomeId(null);
-            setCustomExpenseAmount('');
-            setAddFundSearch('');
-            setAddBankId('');
-            return;
-        }
-
-        // === โหมดเงินรายได้แผ่นดิน - จ่าย ===
-        if (isStateExpense) {
-            if (!addDocNo) {
-                alert('กรุณากรอกที่เอกสาร');
-                return;
-            }
-            if (isStateManualMode) {
-                // กรอกเอง (ยอดยกมา)
-                const amt = parseFloat(stateManualAmount);
-                if (!stateManualDesc || isNaN(amt) || amt <= 0) {
-                    alert('กรุณากรอกรายละเอียดและจำนวนเงิน');
-                    return;
-                }
-                const fundBalance = transactions
-                    .filter((t: any) => t.fundType === 'fund-state' && t.date <= addDate)
-                    .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
-                if (amt > fundBalance) {
-                    alert(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือเงินรายได้แผ่นดิน (${fmtMoney(fundBalance)} บาท)`);
-                    return;
-                }
-                addTransaction({
-                    id: Date.now(),
-                    date: addDate,
-                    docNo: addDocNo,
-                    description: `ส่งดอกเบี้ย (${stateManualDesc})`,
-                    fundType: 'fund-state',
-                    income: 0,
-                    expense: amt,
-                    payer: '',
-                    payee: stateManualDesc,
-                });
-            } else {
-                // เลือกจากรายการรายรับ
-                if (!selectedStateIncomeId) {
-                    alert('กรุณาเลือกรายการรายรับเงินรายได้แผ่นดินที่ต้องการจ่าย');
-                    return;
-                }
-                const selectedTx = stateIncomeTransactions.find((t: any) => t.id === selectedStateIncomeId);
-                if (!selectedTx) {
-                    alert('ไม่พบรายการที่เลือก');
-                    return;
-                }
-                const amt = parseFloat(customExpenseAmount);
-                if (isNaN(amt) || amt <= 0) {
-                    alert('กรุณากรอกจำนวนเงินที่ต้องการจ่าย');
-                    return;
-                }
-                const fundBalance = transactions
-                    .filter((t: any) => t.fundType === 'fund-state' && t.date <= addDate)
-                    .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
-                if (amt > fundBalance) {
-                    alert(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือเงินรายได้แผ่นดิน (${fmtMoney(fundBalance)} บาท)`);
-                    return;
-                }
-                addTransaction({
-                    id: Date.now(),
-                    date: addDate,
-                    docNo: addDocNo,
-                    description: `ส่งดอกเบี้ย (${selectedTx.description || 'เงินรายได้แผ่นดิน'})`,
-                    fundType: 'fund-state',
-                    income: 0,
-                    expense: amt,
-                    payer: '',
-                    payee: selectedTx.description || selectedTx.payer || '',
-                    incomeRefId: selectedTx.id,
-                });
-            }
-
-            setIsAddOpen(false);
-            setSubItems([createSubItem()]);
-            setAddDate(new Date().toISOString().slice(0, 10));
-            setAddDocNo('');
-            setAddPayeeType(null);
-            setSelectedStateIncomeId(null);
-            setIsStateManualMode(false);
-            setStateManualDesc('');
-            setStateManualAmount('');
-            setCustomExpenseAmount('');
-            setAddFundSearch('');
-            setAddBankId('');
-            return;
-        }
-
-        // === โหมดปกติ (ไม่ใช่ภาษี 1%) ===
-        // Separate header items (no amount) from data items (has amount)
-        const dataItems = subItems.filter(s => {
-            const amt = parseFloat(s.amount);
-            return amt > 0 && !isNaN(amt) && s.description;
-        });
-        // Find the first header item (has description but no amount)
-        const headerItem = subItems.find(s => s.description && (!s.amount || parseFloat(s.amount) === 0 || isNaN(parseFloat(s.amount))));
-        const headerTitle = headerItem?.description || '';
-
-        if (dataItems.length === 0 || !addDocNo) {
-            alert('กรุณากรอกที่เอกสาร และรายการย่อยอย่างน้อย 1 รายการ (ชื่อรายการ + จำนวนเงิน)');
-            return;
-        }
-
-        const isInterestMode = addTransactionType === 'income' && addFundType === 'fund-state';
-
-        if (isInterestMode && !addBankId) {
-            alert('กรุณาเลือกบัญชีธนาคารที่รับดอกเบี้ย (เนื่องจากเป็นรายการเงินรายได้แผ่นดิน)');
-            return;
-        }
-
-        if (addTransactionType === 'expense') {
-            if (!addPayeeType) {
-                alert('กรุณาเลือกประเภทผู้รับเงิน (นิติบุคคล หรือ บุคคลธรรมดา)');
-                return;
-            }
-            const fundBalance = transactions
-                .filter((t: any) => t.fundType === addFundType && t.date <= addDate)
-                .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
-            if (subTotal > fundBalance) {
-                alert(`ยอดรวม ${fmtMoney(subTotal)} บาท เกินยอดคงเหลือประเภท (${fmtMoney(fundBalance)} บาท)`);
-                return;
-            }
-
-            // Check if tax warning should be shown
-            const taxThreshold = addPayeeType === 'legal' ? 500 : 10000;
-            if (subTotal > taxThreshold) {
-                const taxAmt = Math.round(subTotal * 0.01 * 100) / 100;
-                setTaxWarningAmount(taxAmt);
-                setTaxWarningPayeeType(addPayeeType);
-                setShowTaxWarning(true);
-            }
-        }
-
-        for (let idx = 0; idx < dataItems.length; idx++) {
-            const s = dataItems[idx];
-            const amt = parseFloat(s.amount);
-            addTransaction({
-                id: Date.now() + idx,
-                date: addDate,
-                docNo: addDocNo,
-                description: s.description,
-                fundType: addFundType,
-                income: addTransactionType === 'income' ? amt : 0,
-                expense: addTransactionType === 'expense' ? amt : 0,
-                payer: addTransactionType === 'income' ? headerTitle : '',
-                payee: addTransactionType === 'expense' ? headerTitle : '',
-                recipientType: addTransactionType === 'expense' ? (addPayeeType === 'legal' ? 'juristic' : 'individual') : undefined,
-                bankId: isInterestMode ? addBankId : undefined,
-            });
-        }
-
-        setIsAddOpen(false);
-        setSubItems([createSubItem()]);
-        setAddDate(new Date().toISOString().slice(0, 10));
-        setAddDocNo('');
-        setAddPayeeType(null);
-        setSelectedTaxIncomeId(null);
-        setTaxPayerName('');
-        setTaxAmount('');
-        setAddFundSearch('');
-        setAddBankId('');
-    };
 
     const { fyBE, bookNo, dailyData, prevCashStart, yodYokPaiEnd,
         totalRecYear, totalPayYear } = useMemo(() => {
@@ -602,25 +124,63 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                 };
             };
 
-            const prevCash = transactions
-                .filter((t: any) => t.date < fyStart)
-                .reduce((a: number, t: any) => a + (t.income || 0) - (t.expense || 0), 0);
-
-            const curTxs = transactions
-                .filter((t: any) => t.date >= fyStart && t.date <= fyEnd)
-                .sort((a: any, b: any) => a.date.localeCompare(b.date));
-
             const sumArr = (arr: any[]) => arr.reduce((a: any, r: any) => ({
                 cash: a.cash + r.cash, budget: a.budget + r.budget,
                 revenue: a.revenue + r.revenue, nonBudget: a.nonBudget + r.nonBudget,
             }), { cash: 0, budget: 0, revenue: 0, nonBudget: 0 });
 
-            let currentPrevCash = prevCash;
-            const prevAccTxs = transactions.filter((t: any) => t.date < fyStart);
-            let runAccRec = sumArr(prevAccTxs.filter((t: any) => (t.income || 0) > 0).map((t: any) => getAmounts(t.income, t.fundType)));
-            let runAccPay = sumArr(prevAccTxs.filter((t: any) => (t.expense || 0) > 0).map((t: any) => getAmounts(t.expense, t.fundType)));
+            const curTxs = transactions.filter(
+                (t: any) => t.date >= fyStart && t.date <= fyEnd
+            );
 
-            const uniqueDays = Array.from(new Set(curTxs.map((t: any) => t.date)));
+            // คำนวณยอดเงินสะสมจริงจากรายการอดีตทั้งหมด โดยไม่รวมสิ่งที่เคยเขียนว่า 'ยกยอดมา' 
+            const truePrevTxs = transactions.filter((t: any) => t.date < fyStart && !t.description?.includes('ยกยอดมา'));
+            const prevCash = truePrevTxs.reduce((sum: number, t: any) => sum + (t.income || 0) - (t.expense || 0), 0);
+
+            // === คำนวณยอดยกมาแยกตามหมวดเงิน (จากรายการจริง ไม่ใช่ transactions "ยกยอดมา") ===
+            const fundBalanceMap: Record<string, number> = {};
+            truePrevTxs.forEach((t: any) => {
+                const ft = t.fundType || 'unknown';
+                if (!fundBalanceMap[ft]) fundBalanceMap[ft] = 0;
+                fundBalanceMap[ft] += (t.income || 0) - (t.expense || 0);
+            });
+            // สร้างรายการ carry-forward แยกตามหมวดเงิน (เฉพาะที่มียอด != 0)
+            const orderPriority = [
+                'fund-subsidy',
+                'fund-15y-book',
+                'fund-15y-supply',
+                'fund-15y-uniform',
+                'fund-15y-activity',
+                'fund-poor',
+                'fund-state',
+                'fund-lunch',
+                'fund-eef',
+                'fund-school-income',
+                'fund-tax',
+                'fund-safekeeping',
+            ];
+            const carryForwardBreakdown = Object.entries(fundBalanceMap)
+                .filter(([, bal]) => Math.abs(bal) > 0.01)
+                .map(([ft, bal]) => {
+                    const opt = FUND_TYPE_OPTIONS.find(o => o.value === ft);
+                    const label = opt?.label?.replace(/^\d+\.?\d*\s*/, '') || ft;
+                    const amts = getAmounts(bal, ft);
+                    return { fundType: ft, label, balance: bal, ...amts };
+                })
+                .sort((a, b) => {
+                    const ia = orderPriority.indexOf(a.fundType);
+                    const ib = orderPriority.indexOf(b.fundType);
+                    if (ia !== -1 && ib !== -1) return ia - ib;
+                    if (ia !== -1) return -1;
+                    if (ib !== -1) return 1;
+                    return a.label.localeCompare(b.label);
+                });
+
+            let currentPrevCash = prevCash;
+
+            const uniqueDays = Array.from(new Set(curTxs.map((t: any) => t.date))).sort();
+            let runAccRec = { cash: 0, budget: 0, revenue: 0, nonBudget: 0 };
+            let runAccPay = { cash: 0, budget: 0, revenue: 0, nonBudget: 0 };
 
             const dailyData: any[] = [];
 
@@ -634,10 +194,47 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                     accRec: { ...runAccRec }, accPay: { ...runAccPay }
                 });
             } else {
+                // ถ้ามียอดยกมา ให้ใส่ carry-forward day เป็นวันแรก (ก่อนวันแรกที่มีรายการ)
+                const hasCarryForward = prevCash !== 0 && carryForwardBreakdown.length > 0;
+                if (hasCarryForward) {
+                    // สร้าง virtual carry-forward day (ใช้วันเริ่มต้นปีงบประมาณ)
+                    const cfDate = fyStart;
+                    const cfDateStr = fmtShort(cfDate);
+                    // สร้าง receipts จาก carryForwardBreakdown (ทั้งบวกและลบ)
+                    // บวก = ยกยอดเงิน, ลบ = ยกยอดหนี้/ติดลบ (แสดงเป็น negative amount ใน receipts)
+                    const cfReceipts = carryForwardBreakdown
+                        .map(item => ({
+                            date: cfDate, dateStr: cfDateStr, docNo: '',
+                            desc: `ยกยอดมา (${item.label})`,
+                            headerTitle: '', ...getAmounts(item.balance, item.fundType),
+                        }));
+                    const cfPayments: any[] = [];
+
+                    const totalRec = sumArr(cfReceipts);
+                    const totalPay = sumArr(cfPayments);
+                    const yodYokPai = prevCash + totalRec.cash - totalPay.cash;
+
+                    dailyData.push({
+                        date: cfDate, dateStr: cfDateStr,
+                        receipts: cfReceipts, payments: cfPayments,
+                        prevCash: 0, yodYokPai,
+                        totalRec, totalPay,
+                        accRec: { ...runAccRec }, accPay: { ...runAccPay },
+                        isCarryForwardDay: true,
+                        prevYearBE: fyBE - 1,
+                        carryForwardBreakdown,
+                    });
+                    // advance running cash so subsequent days are correct
+                    currentPrevCash = yodYokPai;
+                }
+
                 uniqueDays.forEach(date => {
                     const txsToday = curTxs.filter((t: any) => t.date === date);
+                    // กรอง transactions "ยกยอดมา" ออกจากรายการวันนี้ (เพราะใช้ calculated breakdown แล้ว)
+                    const realTxsToday = txsToday.filter((t: any) => !t.description?.includes('ยกยอดมา'));
+
                     const receipts: any[] = [], payments: any[] = [];
-                    txsToday.forEach((t: any) => {
+                    realTxsToday.forEach((t: any) => {
                         if ((t.income || 0) > 0) {
                             const amts = getAmounts(t.income, t.fundType);
                             receipts.push({ date: t.date, dateStr: fmtShort(t.date), docNo: t.docNo || '', desc: t.description || '', headerTitle: t.payer || '', ...amts });
@@ -649,6 +246,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                     });
 
                     const dayRev = sumArr(receipts), dayPay = sumArr(payments);
+
                     const dayPrevCash = currentPrevCash;
                     const yodYokPai = currentPrevCash + dayRev.cash - dayPay.cash;
                     currentPrevCash = yodYokPai;
@@ -656,8 +254,8 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                     runAccRec = { cash: runAccRec.cash + dayRev.cash, budget: runAccRec.budget + dayRev.budget, revenue: runAccRec.revenue + dayRev.revenue, nonBudget: runAccRec.nonBudget + dayRev.nonBudget };
                     runAccPay = { cash: runAccPay.cash + dayPay.cash, budget: runAccPay.budget + dayPay.budget, revenue: runAccPay.revenue + dayPay.revenue, nonBudget: runAccPay.nonBudget + dayPay.nonBudget };
 
-                    // ตรวจว่าวันนี้เป็นวันยกยอดมาจากปีก่อน (รายการรับล้วนเป็น "ยกยอดมา")
-                    const isCarryForwardDay = receipts.length > 0 && receipts.every((r: any) => r.desc.includes('ยกยอดมา'));
+                    // ข้ามวันที่ไม่มีรายการจริงเหลือ (เช่น มีแต่ ยกยอดมา ที่กรองออกไปแล้ว)
+                    if (receipts.length === 0 && payments.length === 0) return;
 
                     dailyData.push({
                         date, dateStr: fmtShort(date as string),
@@ -665,7 +263,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                         prevCash: dayPrevCash, yodYokPai,
                         totalRec: dayRev, totalPay: dayPay,
                         accRec: { ...runAccRec }, accPay: { ...runAccPay },
-                        isCarryForwardDay,
+                        isCarryForwardDay: false,
                         prevYearBE: fyBE - 1,
                     });
                 });
@@ -724,7 +322,8 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
         const fyStart = getFiscalYearStart(fiscalYear);
         const fyStartDateStr = `1 ตุลาคม ${toBE(fyStart.getFullYear())}`;
 
-        const prevTxs = transactions.filter((t: any) => t.date < fyStart.toISOString().slice(0, 10));
+        // คำนวณเฉพาะ Transaction จริง ไม่รวม 'ยกยอดมา' ป้องกันยอดเบิ้ล
+        const prevTxs = transactions.filter((t: any) => t.date < fyStart.toISOString().slice(0, 10) && !t.description?.includes('ยกยอดมา'));
         const balances: Record<string, number> = {};
         prevTxs.forEach((t: any) => {
             const key = t.fundType;
@@ -781,98 +380,50 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
         const fyStartDate = `${fyCE - 1}-10-01`;
         const fundLabel = (ft: string) => FUND_TYPE_OPTIONS.find(o => o.value === ft)?.label || ft;
 
-        // 1. ตรวจสอบว่ายกยอดมาปีนี้แล้ว → แสดงรายการ (view mode)
-        const existingCarryFwd = transactions.filter(t =>
-            t.date === fyStartDate && t.description?.includes('ยกยอดมา')
-        );
-        if (existingCarryFwd.length > 0) {
-            const viewItems = existingCarryFwd.map(t => ({
-                fundType: t.fundType,
-                label: fundLabel(t.fundType),
-                balance: t.income || 0,
-            }));
-            setCarryForwardItems(viewItems);
-            setIsViewMode(true);
-            setIsManualMode(false);
-            setIsCarryForwardOpen(true);
-            return;
-        }
+        // คำนวณยอดเงินสะสมที่แท้จริงถึงก่อนวันที่ 1 ต.ค. (รวมรายการยกยอดมาในอดีตทั้งหมดโดยไม่นับทับซ้อน)
+        const prevTxs = transactions.filter((t: any) => t.date < fyStartDate && !t.description?.includes('ยกยอดมา'));
 
-        // 2. หาข้อมูลย้อนหลังสูงสุด 5 ปี (อัตโนมัติ chain)
-        let chainFromFyCE = -1;
-        let balanceByFund: Record<string, number> = {};
+        const bal: Record<string, number> = {};
+        prevTxs.forEach((t: any) => {
+            if (!bal[t.fundType]) bal[t.fundType] = 0;
+            bal[t.fundType] += (t.income || 0) - (t.expense || 0);
+        });
 
-        for (let yearsBack = 1; yearsBack <= 5; yearsBack++) {
-            const checkFyCE = fyCE - yearsBack;
-            const checkFyEnd = `${checkFyCE - 1}-09-30`;
-            const prevTxs = transactions.filter(t => t.date <= checkFyEnd);
-            if (prevTxs.length > 0) {
-                const bal: Record<string, number> = {};
-                prevTxs.forEach(t => {
-                    if (!bal[t.fundType]) bal[t.fundType] = 0;
-                    bal[t.fundType] += (t.income || 0) - (t.expense || 0);
-                });
-                const positives = Object.entries(bal).filter(([, b]) => b > 0);
-                if (positives.length > 0) {
-                    chainFromFyCE = checkFyCE;
-                    balanceByFund = Object.fromEntries(positives);
-                    break;
-                }
-            }
-        }
+        const orderPriority = [
+            'fund-subsidy',
+            'fund-subsidy-utility',
+            'fund-15y-book',
+            'fund-15y-supply',
+            'fund-15y-uniform',
+            'fund-15y-activity',
+            'fund-poor',
+            'fund-state',
+            'fund-lunch',
+            'fund-eef',
+            'fund-school-income',
+            'fund-tax',
+            'fund-safekeeping',
+        ];
+        const items = Object.entries(bal)
+            .filter(([, balance]) => Math.abs(balance) > 0.01)
+            .map(([fundType, balance]) => ({
+                fundType,
+                label: fundLabel(fundType),
+                balance
+            }))
+            .sort((a, b) => {
+                const ia = orderPriority.indexOf(a.fundType);
+                const ib = orderPriority.indexOf(b.fundType);
+                if (ia !== -1 && ib !== -1) return ia - ib;
+                if (ia !== -1) return -1;
+                if (ib !== -1) return 1;
+                return a.label.localeCompare(b.label);
+            });
 
-        if (Object.keys(balanceByFund).length > 0) {
-            // คำนวณปีที่ต้อง chain
-            const yearsToChain: number[] = [];
-            for (let y = chainFromFyCE + 1; y <= fyCE; y++) {
-                yearsToChain.push(y);
-            }
-            const gapYears = yearsToChain.slice(0, -1); // ปีกลาง
-            const finalYear = fyCE; // ปีปัจจุบัน
-
-            const items = Object.entries(balanceByFund)
-                .filter(([, bal]) => bal > 0)
-                .map(([fundType, balance]) => ({ fundType, label: fundLabel(fundType), balance }));
-
-            const chainMsg = gapYears.length > 0
-                ? `\n\n\u26a0️ ระบบจะยกยอดผ่าน ${gapYears.map(y => y + 543).join(' → ')} → ${finalYear + 543} อัตโนมัติ`
-                : '';
-
-            if (!confirm(`ยืนยันยกยอดคงเหลือจากปี ${chainFromFyCE + 543} มาปี ${fyBE}\n\nรายการ ${items.length} ประเภท รวมยอด ${fmtMoney(items.reduce((s, i) => s + i.balance, 0))} บาท${chainMsg}`)) return;
-
-            // ยกยอดผ่านทุกปี (chain)
-            for (const yearCE of yearsToChain) {
-                const yearStartDate = `${yearCE - 1}-10-01`;
-                const yearBE = yearCE + 543;
-                const fromBE = yearBE - 1;
-                // ตรวจว่าปีนี้ยกยอดแล้วหรือยัง
-                const alreadyHas = transactions.some(t =>
-                    t.date === yearStartDate && t.description?.includes('ยกยอดมา')
-                );
-                if (alreadyHas) continue;
-
-                for (let idx = 0; idx < items.length; idx++) {
-                    const { fundType, balance } = items[idx];
-                    await addTransaction({
-                        id: Date.now() + idx,
-                        date: yearStartDate,
-                        docNo: '-',
-                        description: `ยกยอดมา (${fundLabel(fundType)}) จากปี ${fromBE}`,
-                        fundType,
-                        income: balance,
-                        expense: 0,
-                        payer: `ยกยอดจากปีงบ ${fromBE}`,
-                    });
-                }
-            }
-            alert(`✅ ยกยอดสำเร็จ${gapYears.length > 0 ? ` (chain ${yearsToChain.length} ปี)` : ''}: ${items.length} รายการ`);
-        } else {
-            // Manual mode
-            setCarryForwardItems([]);
-            setIsViewMode(false);
-            setIsManualMode(true);
-            setIsCarryForwardOpen(true);
-        }
+        setCarryForwardItems(items);
+        setIsViewMode(true);
+        setIsManualMode(false);
+        setIsCarryForwardOpen(true);
     };
 
     const handleCarryForwardConfirm = () => {
@@ -940,15 +491,25 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                         </div>
                     </div>
                     <div className="flex gap-2 items-center flex-wrap">
-                        <button onClick={() => { setIsAddOpen(true); setAddTransactionType('income'); }}
+                        <button onClick={() => setIsCheckModalOpen(true)}
+                            className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-semibold border border-blue-200 shadow-sm transition-all mr-2">
+                            <span className="material-symbols-outlined text-[18px]">find_in_page</span>
+                            ตรวจสอบความถูกต้อง
+                        </button>
+                        <button onClick={() => { setIsAddOpen(true); setInitialAddType('income'); }}
                             className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-green-500/30 transition-all">
                             <span className="material-symbols-outlined text-base">add</span>
                             เพิ่มรายรับ
                         </button>
-                        <button onClick={() => { setIsAddOpen(true); setAddTransactionType('expense'); }}
+                        <button onClick={() => { setIsAddOpen(true); setInitialAddType('expense'); }}
                             className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-red-500/30 transition-all">
                             <span className="material-symbols-outlined text-base">remove</span>
                             เพิ่มรายจ่าย
+                        </button>
+                        <button onClick={() => setIsBorrowModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-orange-500/30 transition-all">
+                            <span className="material-symbols-outlined text-base">currency_exchange</span>
+                            ยืมเงิน
                         </button>
 
                         {/* Bank Accounts Dropdown */}
@@ -1097,13 +658,16 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                                 <th className="px-4 py-3 text-right whitespace-nowrap text-blue-600">คงเหลือสะสม</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                            <tr className="bg-blue-50/30 dark:bg-blue-900/10 font-medium">
-                                <td colSpan={4} className="px-4 py-3 text-slate-600 text-right">ยอดยกมา {cashBookFilter === 'all' ? '(ทุกประเภท)' : ''}</td>
-                                <td className="px-4 py-3 text-right"></td>
-                                <td className="px-4 py-3 text-right"></td>
-                                <td className="px-4 py-3 text-right text-blue-700 font-bold">{fmtMoney(prevCashStart)}</td>
-                            </tr>
+                        <tbody className="divide-y divide-gray-100">
+                            {/* แสดงยอดยกมาจากปีงบประมาณที่แล้วถ้ามี */}
+                            {prevCashStart !== 0 && (
+                                <tr className="font-medium text-amber-800 bg-amber-50/50">
+                                    <td className="px-4 py-2 text-center" colSpan={6}>
+                                        ยอดยกมาจากปีงบประมาณ {fyBE - 1}
+                                    </td>
+                                    <td className="px-4 py-2 text-right font-bold">{fmtMoney(prevCashStart)}</td>
+                                </tr>
+                            )}
 
                             {(() => {
                                 const fyCE = fyBE - 543;
@@ -1111,13 +675,26 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                                 const fyStart = `${fyStartYear}-10-01`;
                                 const fyEnd = `${fyCE}-09-30`;
 
+                                // กรอง transactions "ยกยอดมา" ออก (เพราะระบบคำนวณยอดยกมาแยกแล้ว)
                                 let curTxs = transactions
-                                    .filter((t: any) => t.date >= fyStart && t.date <= fyEnd)
+                                    .filter((t: any) => t.date >= fyStart && t.date <= fyEnd && !t.description?.includes('ยกยอดมา'))
                                     .sort((a: any, b: any) => {
+                                        const aTime = new Date(a.date).getTime();
+                                        const bTime = new Date(b.date).getTime();
                                         if (sortOrder === 'desc') {
-                                            return new Date(b.date).getTime() - new Date(a.date).getTime() || (b.id - a.id);
+                                            if (bTime !== aTime) return bTime - aTime;
+                                            // วันเดียวกัน: รายรับก่อนรายจ่าย
+                                            const aIsIncome = (a.income || 0) > 0 ? 1 : 0;
+                                            const bIsIncome = (b.income || 0) > 0 ? 1 : 0;
+                                            if (bIsIncome !== aIsIncome) return bIsIncome - aIsIncome;
+                                            return b.id - a.id;
                                         } else {
-                                            return new Date(a.date).getTime() - new Date(b.date).getTime() || (a.id - b.id);
+                                            if (aTime !== bTime) return aTime - bTime;
+                                            // วันเดียวกัน: รายรับก่อนรายจ่าย
+                                            const aIsIncome = (a.income || 0) > 0 ? 1 : 0;
+                                            const bIsIncome = (b.income || 0) > 0 ? 1 : 0;
+                                            if (bIsIncome !== aIsIncome) return bIsIncome - aIsIncome;
+                                            return a.id - b.id;
                                         }
                                     });
 
@@ -1151,9 +728,19 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                                 const balanceMap = new Map<number | string, number>();
                                 {
                                     let runBal = prevCashStart;
+                                    // กรอง "ยกยอดมา" ออกจาก balance map ด้วย
                                     const balBase = transactions
-                                        .filter((t: any) => t.date >= fyStart && t.date <= fyEnd)
-                                        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime() || (a.id - b.id));
+                                        .filter((t: any) => t.date >= fyStart && t.date <= fyEnd && !t.description?.includes('ยกยอดมา'))
+                                        .sort((a: any, b: any) => {
+                                            const aTime = new Date(a.date).getTime();
+                                            const bTime = new Date(b.date).getTime();
+                                            if (aTime !== bTime) return aTime - bTime;
+                                            // วันเดียวกัน: รายรับก่อนรายจ่าย
+                                            const aIsIncome = (a.income || 0) > 0 ? 1 : 0;
+                                            const bIsIncome = (b.income || 0) > 0 ? 1 : 0;
+                                            if (bIsIncome !== aIsIncome) return bIsIncome - aIsIncome;
+                                            return a.id - b.id;
+                                        });
                                     // ถ้ากรองตาม fund ด้วยให้ใช้ fund ที่กรองแล้วสำหรับ balance
                                     const balFiltered = cashBookFilter !== 'all' ? balBase.filter((t: any) => t.fundType === cashBookFilter) : balBase;
                                     balFiltered.forEach((t: any) => {
@@ -1537,937 +1124,43 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                 </div>
             )}
 
+            {/* AI Checking Modal */}
+            <CashBookCheckModal
+                isOpen={isCheckModalOpen}
+                onClose={() => setIsCheckModalOpen(false)}
+                fyBE={fyBE}
+            />
+
             {/* Add Transaction Modal */}
             {isAddOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100/80 backdrop-blur-sm animate-fade-in">
-                    <form onSubmit={handleAddSubmit}
-                        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[94vh] min-h-[80vh] flex flex-col overflow-hidden animate-scale-in mx-4">
-
-                        {/* Top */}
-                        <div className="px-8 pt-6 pb-4 shrink-0">
-                            <div className="flex justify-between items-center mb-2">
-                                <div>
-                                    <p className="text-sm text-gray-400">สมุดเงินสด</p>
-                                    <h2 className="text-2xl font-bold text-gray-900">เพิ่มรายการ</h2>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {/* iOS-style switch */}
-                                    <span className={`text-xs font-semibold ${addTransactionType === 'income' ? 'text-green-600' : 'text-gray-300'}`}>รับ</span>
-                                    <button type="button"
-                                        onClick={() => setAddTransactionType(addTransactionType === 'income' ? 'expense' : 'income')}
-                                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${addTransactionType === 'expense' ? 'bg-red-500' : 'bg-green-500'}`}>
-                                        <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${addTransactionType === 'expense' ? 'translate-x-[22px]' : 'translate-x-0.5'}`}></div>
-                                    </button>
-                                    <span className={`text-xs font-semibold ${addTransactionType === 'expense' ? 'text-red-600' : 'text-gray-300'}`}>จ่าย</span>
-                                    <span className="mx-1 text-gray-200">|</span>
-                                    <button type="button" onClick={() => setIsAddOpen(false)}
-                                        className="text-blue-500 hover:text-blue-700 text-sm font-semibold">ปิด</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Scrollable content */}
-                        <div className="flex-1 overflow-y-auto px-8">
-
-                            {/* Shared fields */}
-                            <div className="space-y-4 mb-4">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-500 mb-1 block">ประเภท / หมวดเงิน</label>
-                                    <div className="relative">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsFundDropdownOpen(!isFundDropdownOpen)}
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-base outline-none focus:border-gray-400 transition-colors flex justify-between items-center"
-                                        >
-                                            <span className="truncate">
-                                                {FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'เลือกประเภท'}
-                                            </span>
-                                            <span className="material-symbols-outlined text-gray-400 text-sm">expand_more</span>
-                                        </button>
-
-                                        {/* Dropdown Menu */}
-                                        {isFundDropdownOpen && (
-                                            <>
-                                                <div className="fixed inset-0 z-40" onClick={() => setIsFundDropdownOpen(false)}></div>
-                                                <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-64 flex flex-col overflow-hidden">
-                                                    <div className="p-2 border-b border-gray-100 shrink-0">
-                                                        <input
-                                                            type="text"
-                                                            autoFocus
-                                                            placeholder="ค้นหาประเภท..."
-                                                            value={addFundSearch}
-                                                            onChange={e => setAddFundSearch(e.target.value)}
-                                                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400"
-                                                        />
-                                                    </div>
-                                                    <div className="overflow-y-auto py-1">
-                                                        {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => {
-                                                            const filteredOpts = FUND_TYPE_OPTIONS.filter(opt => opt.group === group && opt.label.toLowerCase().includes(addFundSearch.toLowerCase()));
-                                                            if (filteredOpts.length === 0) return null;
-                                                            return (
-                                                                <div key={group}>
-                                                                    <div className="px-3 py-1.5 text-xs font-bold text-gray-400 bg-gray-50 uppercase tracking-wide">
-                                                                        {group}
-                                                                    </div>
-                                                                    {filteredOpts.map(opt => (
-                                                                        <button
-                                                                            key={opt.value}
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setAddFundType(opt.value);
-                                                                                setIsFundDropdownOpen(false);
-                                                                                setAddFundSearch('');
-                                                                            }}
-                                                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 transition-colors ${addFundType === opt.value ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-700'}`}
-                                                                        >
-                                                                            {opt.label}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 mt-4">
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-500 mb-1 block">วัน/เดือน/ปี</label>
-                                        <ThaiDatePicker value={addDate} onChange={(val: string) => setAddDate(val)} />
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-500 mb-1 block">ที่เอกสาร</label>
-                                        <input type="text" value={addDocNo}
-                                            onChange={e => setAddDocNo(e.target.value)}
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-base outline-none focus:border-gray-400 transition-colors"
-                                            placeholder="กค 68/001" />
-                                    </div>
-                                </div>
-                                {addTransactionType === 'income' && addFundType === 'fund-state' && (
-                                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 animate-fade-in mt-4">
-                                        <label className="text-sm font-semibold text-blue-800 mb-1 block">เงินรายได้แผ่นดิน(ดอกเบี้ย) — เลือกบัญชีธนาคาร</label>
-                                        <p className="text-xs text-blue-600 mb-3 opacity-80">โปรดระบุบัญชีธนาคารที่รับดอกเบี้ยมา</p>
-                                        <select value={addBankId} onChange={e => setAddBankId(e.target.value)}
-                                            className="w-full px-4 py-3 rounded-xl border border-blue-200 bg-white text-base outline-none focus:border-blue-400 transition-colors">
-                                            <option value="">-- กรุณาเลือกบัญชีธนาคาร --</option>
-                                            {(schoolSettings.bankAccounts || []).map(acc => (
-                                                <option key={acc.id} value={acc.id}>{acc.name} ({acc.bankName} {acc.accountNo})</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* === โหมดภาษี 1% - รับ === */}
-                            {addFundType === 'fund-tax' && addTransactionType === 'income' && (
-                                <div className="space-y-3 mt-2">
-                                    <div className="bg-orange-50/50 rounded-xl border border-orange-200 p-4">
-                                        <label className="text-xs font-semibold text-orange-600 mb-2 flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-sm">storefront</span>
-                                            รับภาษี 1% จากใคร?
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={taxPayerName}
-                                            onChange={e => setTaxPayerName(e.target.value)}
-                                            className="w-full px-4 py-3 rounded-xl border border-orange-200 bg-white text-base outline-none focus:border-orange-400 transition-colors mt-1"
-                                            placeholder="เช่น ร้านเกรซ, ร้านวินัย"
-                                        />
-                                        <div className="mt-3">
-                                            <label className="text-xs font-semibold text-orange-600 mb-1 block">จำนวนเงินภาษี</label>
-                                            <div className={`flex items-center rounded-xl px-4 py-3 border ${parseFloat(taxAmount) > 0 ? 'bg-green-50 border-green-300' : 'bg-white border-orange-200'}`}>
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    value={taxAmount}
-                                                    onChange={e => setTaxAmount(e.target.value)}
-                                                    className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(taxAmount) > 0 ? 'text-green-700' : 'text-gray-400'}`}
-                                                    placeholder="0.00"
-                                                />
-                                                <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                            </div>
-                                        </div>
-                                        {taxPayerName && parseFloat(taxAmount) > 0 && (
-                                            <div className="mt-3 bg-white rounded-lg border border-orange-100 px-3 py-2">
-                                                <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                <p className="text-sm font-semibold text-gray-700">
-                                                    <span className="material-symbols-outlined text-green-500 text-sm align-middle mr-1">check_circle</span>
-                                                    รับเงินภาษี 1% จาก{taxPayerName} จำนวน {fmtMoney(parseFloat(taxAmount))} บาท
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* === โหมดภาษี 1% - จ่าย === */}
-                            {addFundType === 'fund-tax' && addTransactionType === 'expense' && (
-                                <div className="mt-2">
-                                    {/* ปุ่มสลับโหมด */}
-                                    <div className="flex gap-1.5 mb-3">
-                                        <button
-                                            type="button"
-                                            onClick={() => { setIsTaxManualMode(false); setTaxManualDesc(''); setTaxManualAmount(''); }}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all border ${!isTaxManualMode
-                                                ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
-                                                : 'bg-white border-gray-200 text-gray-500 hover:border-orange-300'
-                                                }`}
-                                        >
-                                            <span className="material-symbols-outlined text-sm align-middle mr-0.5">list</span>
-                                            เลือกจากรายการรับ
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setIsTaxManualMode(true); setSelectedTaxIncomeId(null); }}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all border ${isTaxManualMode
-                                                ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
-                                                : 'bg-white border-gray-200 text-gray-500 hover:border-orange-300'
-                                                }`}
-                                        >
-                                            <span className="material-symbols-outlined text-sm align-middle mr-0.5">edit_note</span>
-                                            กรอกเอง (ยอดยกมา)
-                                        </button>
-                                    </div>
-
-                                    {!isTaxManualMode ? (
-                                        /* โหมดเลือกจากรายการรับ */
-                                        <>
-                                            <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                                <span className="material-symbols-outlined text-sm text-orange-500">receipt_long</span>
-                                                เลือกรายการรายรับภาษี 1% ที่ต้องการนำส่ง
-                                                {!selectedTaxIncomeId && (
-                                                    <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
-                                                )}
-                                            </label>
-                                            <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                                                {taxIncomeTransactions.length === 0 ? (
-                                                    <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                                        <span className="material-symbols-outlined text-2xl mb-1 opacity-50">inbox</span>
-                                                        <p className="text-xs">ยังไม่มีรายการรายรับภาษี 1%</p>
-                                                        <p className="text-[10px] mt-1">หากเป็นยอดยกมา กรุณาใช้โหมด "กรอกเอง" แทน</p>
-                                                    </div>
-                                                ) : (
-                                                    taxIncomeTransactions.map((tx: any) => {
-                                                        const isSelected = selectedTaxIncomeId === tx.id;
-                                                        return (
-                                                            <button
-                                                                key={tx.id}
-                                                                type="button"
-                                                                onClick={() => setSelectedTaxIncomeId(isSelected ? null : tx.id)}
-                                                                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all border-2 flex justify-between items-center gap-2 ${isSelected
-                                                                    ? 'bg-orange-50 border-orange-400 shadow-sm shadow-orange-100'
-                                                                    : 'bg-white border-gray-200 hover:border-orange-300 hover:bg-orange-50/30'
-                                                                    }`}
-                                                            >
-                                                                <div className="flex items-center gap-2 min-w-0">
-                                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected
-                                                                        ? 'border-orange-500 bg-orange-500'
-                                                                        : 'border-gray-300'
-                                                                        }`}>
-                                                                        {isSelected && (
-                                                                            <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        <p className="font-medium text-gray-800 truncate">{tx.description || tx.payer || 'ไม่ระบุรายการ'}</p>
-                                                                        <p className="text-[11px] text-gray-400">
-                                                                            {fmtShort(tx.date)} • เอกสาร: {tx.docNo || '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                                <span className="text-sm font-bold text-green-600 whitespace-nowrap shrink-0">
-                                                                    {fmtMoney(tx.income)} ฿
-                                                                </span>
-                                                            </button>
-                                                        );
-                                                    })
-                                                )}
-                                            </div>
-                                            {selectedTaxIncomeId && (() => {
-                                                const sel = taxIncomeTransactions.find((t: any) => t.id === selectedTaxIncomeId);
-                                                if (!sel) return null;
-                                                return (
-                                                    <div className="mt-3 bg-red-50/50 rounded-xl border border-red-200 px-4 py-3">
-                                                        <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                        <p className="text-sm font-semibold text-gray-700">
-                                                            <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                            นำส่งภาษี 1% ({sel.description || sel.payer || 'ไม่ระบุ'}) จำนวน {fmtMoney(sel.income)} บาท
-                                                        </p>
-                                                    </div>
-                                                );
-                                            })()}
-                                        </>
-                                    ) : (
-                                        /* โหมดกรอกเอง (ยอดยกมา) */
-                                        <div className="bg-orange-50/50 rounded-xl border border-orange-200 p-4">
-                                            <p className="text-[11px] text-orange-600 mb-3 flex items-center gap-1">
-                                                <span className="material-symbols-outlined text-sm">info</span>
-                                                สำหรับยอดยกมาที่ไม่มีรายการรับให้เลือก
-                                            </p>
-                                            <label className="text-xs font-semibold text-orange-700 mb-1 block">รายละเอียดการนำส่ง</label>
-                                            <input
-                                                type="text"
-                                                value={taxManualDesc}
-                                                onChange={e => setTaxManualDesc(e.target.value)}
-                                                className="w-full px-4 py-3 rounded-xl border border-orange-200 bg-white text-base outline-none focus:border-orange-400 transition-colors"
-                                                placeholder="เช่น นำส่งภาษี 1% จากร้านค้า ABC"
-                                            />
-                                            <div className="mt-3">
-                                                <label className="text-xs font-semibold text-orange-700 mb-1 block">จำนวนเงิน</label>
-                                                <div className={`flex items-center rounded-xl px-4 py-3 border ${parseFloat(taxManualAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-orange-200'}`}>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={taxManualAmount}
-                                                        onChange={e => setTaxManualAmount(e.target.value)}
-                                                        className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(taxManualAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                        placeholder="0.00"
-                                                    />
-                                                    <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                                </div>
-                                            </div>
-                                            {taxManualDesc && parseFloat(taxManualAmount) > 0 && (
-                                                <div className="mt-3 bg-white rounded-lg border border-orange-100 px-3 py-2">
-                                                    <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                    <p className="text-sm font-semibold text-gray-700">
-                                                        <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                        นำส่งภาษี 1% ({taxManualDesc}) จำนวน {fmtMoney(parseFloat(taxManualAmount))} บาท
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* === โหมดเงินปัจจัยยากจน - จ่าย === */}
-                            {addFundType === 'fund-poor' && addTransactionType === 'expense' && (
-                                <div className="mt-2">
-                                    <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-sm text-purple-500">volunteer_activism</span>
-                                        เลือกรายการรายรับปัจจัยยากจนที่ต้องการจ่าย
-                                        {!selectedPoorIncomeId && (
-                                            <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
-                                        )}
-                                    </label>
-                                    <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                                        {poorIncomeTransactions.length === 0 ? (
-                                            <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                                <span className="material-symbols-outlined text-2xl mb-1 opacity-50">inbox</span>
-                                                <p className="text-xs">ยังไม่มีรายการรายรับปัจจัยยากจน</p>
-                                                <p className="text-[10px] mt-1">กรุณาเพิ่มรายการรับก่อน</p>
-                                            </div>
-                                        ) : (
-                                            poorIncomeTransactions.map((tx: any) => {
-                                                const isSelected = selectedPoorIncomeId === tx.id;
-                                                return (
-                                                    <button
-                                                        key={tx.id}
-                                                        type="button"
-                                                        onClick={() => setSelectedPoorIncomeId(isSelected ? null : tx.id)}
-                                                        className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all border-2 flex justify-between items-center gap-2 ${isSelected
-                                                            ? 'bg-purple-50 border-purple-400 shadow-sm shadow-purple-100'
-                                                            : 'bg-white border-gray-200 hover:border-purple-300 hover:bg-purple-50/30'
-                                                            }`}
-                                                    >
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected
-                                                                ? 'border-purple-500 bg-purple-500'
-                                                                : 'border-gray-300'
-                                                                }`}>
-                                                                {isSelected && (
-                                                                    <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                                )}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="font-medium text-gray-800 truncate">{tx.description || tx.payer || 'ไม่ระบุรายการ'}</p>
-                                                                <p className="text-[11px] text-gray-400">
-                                                                    {fmtShort(tx.date)} • เอกสาร: {tx.docNo || '-'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <span className="text-sm font-bold text-green-600 whitespace-nowrap shrink-0">
-                                                            {fmtMoney(tx.income)} ฿
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                    {selectedPoorIncomeId && (() => {
-                                        const sel = poorIncomeTransactions.find((t: any) => t.id === selectedPoorIncomeId);
-                                        if (!sel) return null;
-                                        return (
-                                            <div className="mt-3 space-y-2">
-                                                <div className="bg-purple-50/60 rounded-xl border border-purple-200 px-4 py-3">
-                                                    <label className="text-xs font-semibold text-purple-700 block mb-1">จำนวนเงินที่จ่าย (บาท)</label>
-                                                    <div className={`flex items-center rounded-lg px-3 py-2 border ${parseFloat(customExpenseAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-purple-200'}`}>
-                                                        <input
-                                                            type="number" step="0.01"
-                                                            value={customExpenseAmount}
-                                                            onChange={e => setCustomExpenseAmount(e.target.value)}
-                                                            className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(customExpenseAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                            placeholder={`สูงสุด ${fmtMoney(sel.income)}`}
-                                                        />
-                                                        <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                                    </div>
-                                                    <p className="text-[10px] text-purple-500 mt-1">รายการ: {sel.description || 'เงินปัจจัยพื้นฐานนักเรียนยากจน'} (รับมา {fmtMoney(sel.income)} บาท)</p>
-                                                </div>
-                                                {parseFloat(customExpenseAmount) > 0 && (
-                                                    <div className="bg-white rounded-lg border border-purple-100 px-3 py-2">
-                                                        <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                        <p className="text-sm font-semibold text-gray-700">
-                                                            <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                            จ่าย{sel.description || 'เงินปัจจัยพื้นฐานนักเรียนยากจน'} จำนวน {fmtMoney(parseFloat(customExpenseAmount))} บาท
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
-
-                            {/* === โหมดเงิน กสศ. - จ่าย === */}
-                            {addFundType === 'fund-eef' && addTransactionType === 'expense' && (
-                                <div className="mt-2">
-                                    <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-sm text-teal-500">volunteer_activism</span>
-                                        เลือกรายการรายรับ กสศ. ที่ต้องการจ่าย
-                                        {!selectedEefIncomeId && (
-                                            <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
-                                        )}
-                                    </label>
-                                    <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                                        {eefIncomeTransactions.length === 0 ? (
-                                            <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                                <span className="material-symbols-outlined text-2xl mb-1 opacity-50">inbox</span>
-                                                <p className="text-xs">ยังไม่มีรายการรายรับ กสศ.</p>
-                                                <p className="text-[10px] mt-1">กรุณาเพิ่มรายการรับก่อน</p>
-                                            </div>
-                                        ) : (
-                                            eefIncomeTransactions.map((tx: any) => {
-                                                const isSelected = selectedEefIncomeId === tx.id;
-                                                return (
-                                                    <button
-                                                        key={tx.id}
-                                                        type="button"
-                                                        onClick={() => setSelectedEefIncomeId(isSelected ? null : tx.id)}
-                                                        className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all border-2 flex justify-between items-center gap-2 ${isSelected
-                                                            ? 'bg-teal-50 border-teal-400 shadow-sm shadow-teal-100'
-                                                            : 'bg-white border-gray-200 hover:border-teal-300 hover:bg-teal-50/30'
-                                                            }`}
-                                                    >
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected
-                                                                ? 'border-teal-500 bg-teal-500'
-                                                                : 'border-gray-300'
-                                                                }`}>
-                                                                {isSelected && (
-                                                                    <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                                )}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="font-medium text-gray-800 truncate">{tx.description || tx.payer || 'ไม่ระบุรายการ'}</p>
-                                                                <p className="text-[11px] text-gray-400">
-                                                                    {fmtShort(tx.date)} • เอกสาร: {tx.docNo || '-'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <span className="text-sm font-bold text-green-600 whitespace-nowrap shrink-0">
-                                                            {fmtMoney(tx.income)} ฟ
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                    {selectedEefIncomeId && (() => {
-                                        const sel = eefIncomeTransactions.find((t: any) => t.id === selectedEefIncomeId);
-                                        if (!sel) return null;
-                                        return (
-                                            <div className="mt-3 space-y-2">
-                                                <div className="bg-teal-50/60 rounded-xl border border-teal-200 px-4 py-3">
-                                                    <label className="text-xs font-semibold text-teal-700 block mb-1">จำนวนเงินที่จ่าย (บาท)</label>
-                                                    <div className={`flex items-center rounded-lg px-3 py-2 border ${parseFloat(customExpenseAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-teal-200'}`}>
-                                                        <input
-                                                            type="number" step="0.01"
-                                                            value={customExpenseAmount}
-                                                            onChange={e => setCustomExpenseAmount(e.target.value)}
-                                                            className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(customExpenseAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                            placeholder={`สูงสุด ${fmtMoney(sel.income)}`}
-                                                        />
-                                                        <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                                    </div>
-                                                    <p className="text-[10px] text-teal-600 mt-1">รายการ: {sel.description || 'เงิน กสศ.'} (รับมา {fmtMoney(sel.income)} บาท)</p>
-                                                </div>
-                                                {parseFloat(customExpenseAmount) > 0 && (
-                                                    <div className="bg-white rounded-lg border border-teal-100 px-3 py-2">
-                                                        <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                        <p className="text-sm font-semibold text-gray-700">
-                                                            <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                            จ่าย{sel.description || 'เงิน กสศ.'} จำนวน {fmtMoney(parseFloat(customExpenseAmount))} บาท
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
-
-                            {/* === โหมดเงินรายได้แผ่นดิน - จ่าย === */}
-                            {addFundType === 'fund-state' && addTransactionType === 'expense' && (
-                                <div className="mt-2">
-                                    {/* ปุ่มสลับโหมด */}
-                                    <div className="flex gap-1.5 mb-3">
-                                        <button
-                                            type="button"
-                                            onClick={() => { setIsStateManualMode(false); setStateManualDesc(''); setStateManualAmount(''); }}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all border ${!isStateManualMode
-                                                ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                                                : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
-                                                }`}
-                                        >
-                                            <span className="material-symbols-outlined text-sm align-middle mr-0.5">list</span>
-                                            เลือกจากรายการรับ
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setIsStateManualMode(true); setSelectedStateIncomeId(null); }}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all border ${isStateManualMode
-                                                ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                                                : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
-                                                }`}
-                                        >
-                                            <span className="material-symbols-outlined text-sm align-middle mr-0.5">edit_note</span>
-                                            กรอกเอง (ยอดยกมา)
-                                        </button>
-                                    </div>
-
-                                    {!isStateManualMode ? (
-                                        /* โหมดเลือกจากรายการรับ */
-                                        <>
-                                            <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                                <span className="material-symbols-outlined text-sm text-blue-500">account_balance</span>
-                                                เลือกรายการรายรับเงินรายได้แผ่นดิน (ดอกเบี้ย) ที่ต้องการจ่าย
-                                                {!selectedStateIncomeId && (
-                                                    <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
-                                                )}
-                                            </label>
-                                            <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                                                {stateIncomeTransactions.length === 0 ? (
-                                                    <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                                        <span className="material-symbols-outlined text-2xl mb-1 opacity-50">inbox</span>
-                                                        <p className="text-xs">ยังไม่มีรายการรายรับเงินรายได้แผ่นดิน</p>
-                                                        <p className="text-[10px] mt-1">หากเป็นยอดยกมา กรุณาใช้โหมด "กรอกเอง" แทน</p>
-                                                    </div>
-                                                ) : (
-                                                    stateIncomeTransactions.map((tx: any) => {
-                                                        const isSelected = selectedStateIncomeId === tx.id;
-                                                        return (
-                                                            <button
-                                                                key={tx.id}
-                                                                type="button"
-                                                                onClick={() => setSelectedStateIncomeId(isSelected ? null : tx.id)}
-                                                                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all border-2 flex justify-between items-center gap-2 ${isSelected
-                                                                    ? 'bg-blue-50 border-blue-400 shadow-sm shadow-blue-100'
-                                                                    : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'
-                                                                    }`}
-                                                            >
-                                                                <div className="flex items-center gap-2 min-w-0">
-                                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected
-                                                                        ? 'border-blue-500 bg-blue-500'
-                                                                        : 'border-gray-300'
-                                                                        }`}>
-                                                                        {isSelected && (
-                                                                            <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        <p className="font-medium text-gray-800 truncate">{tx.description || tx.payer || 'ไม่ระบุรายการ'}</p>
-                                                                        <p className="text-[11px] text-gray-400">
-                                                                            {fmtShort(tx.date)} • เอกสาร: {tx.docNo || '-'}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                                <span className="text-sm font-bold text-green-600 whitespace-nowrap shrink-0">
-                                                                    {fmtMoney(tx.income)} ฿
-                                                                </span>
-                                                            </button>
-                                                        );
-                                                    })
-                                                )}
-                                            </div>
-                                            {selectedStateIncomeId && (() => {
-                                                const sel = stateIncomeTransactions.find((t: any) => t.id === selectedStateIncomeId);
-                                                if (!sel) return null;
-                                                return (
-                                                    <div className="mt-3 space-y-2">
-                                                        <div className="bg-blue-50/60 rounded-xl border border-blue-200 px-4 py-3">
-                                                            <label className="text-xs font-semibold text-blue-700 block mb-1">จำนวนเงินที่จ่าย (บาท)</label>
-                                                            <div className={`flex items-center rounded-lg px-3 py-2 border ${parseFloat(customExpenseAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-blue-200'}`}>
-                                                                <input
-                                                                    type="number" step="0.01"
-                                                                    value={customExpenseAmount}
-                                                                    onChange={e => setCustomExpenseAmount(e.target.value)}
-                                                                    className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(customExpenseAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                                    placeholder={`สูงสุด ${fmtMoney(sel.income)}`}
-                                                                />
-                                                                <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                                            </div>
-                                                            <p className="text-[10px] text-blue-500 mt-1">รายการ: {sel.description || 'เงินรายได้แผ่นดิน'} (รับมา {fmtMoney(sel.income)} บาท)</p>
-                                                        </div>
-                                                        {parseFloat(customExpenseAmount) > 0 && (
-                                                            <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
-                                                                <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                                <p className="text-sm font-semibold text-gray-700">
-                                                                    <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                                    ส่งดอกเบี้ย ({sel.description || 'เงินรายได้แผ่นดิน'}) จำนวน {fmtMoney(parseFloat(customExpenseAmount))} บาท
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-                                        </>
-                                    ) : (
-                                        /* โหมดกรอกเอง (ยอดยกมา) */
-                                        <div className="bg-blue-50/50 rounded-xl border border-blue-200 p-4">
-                                            <p className="text-[11px] text-blue-600 mb-3 flex items-center gap-1">
-                                                <span className="material-symbols-outlined text-sm">info</span>
-                                                สำหรับยอดยกมาที่ไม่มีรายการรับให้เลือก
-                                            </p>
-                                            <label className="text-xs font-semibold text-blue-700 mb-1 block">รายละเอียดการจ่าย</label>
-                                            <input
-                                                type="text"
-                                                value={stateManualDesc}
-                                                onChange={e => setStateManualDesc(e.target.value)}
-                                                className="w-full px-4 py-3 rounded-xl border border-blue-200 bg-white text-base outline-none focus:border-blue-400 transition-colors"
-                                                placeholder="เช่น ส่งดอกเบี้ยอาหารกลางวันเป็นเงินรายได้แผ่นดิน"
-                                            />
-                                            <div className="mt-3">
-                                                <label className="text-xs font-semibold text-blue-700 mb-1 block">จำนวนเงิน</label>
-                                                <div className={`flex items-center rounded-xl px-4 py-3 border ${parseFloat(stateManualAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-blue-200'}`}>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={stateManualAmount}
-                                                        onChange={e => setStateManualAmount(e.target.value)}
-                                                        className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(stateManualAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                        placeholder="0.00"
-                                                    />
-                                                    <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                                </div>
-                                            </div>
-                                            {stateManualDesc && parseFloat(stateManualAmount) > 0 && (
-                                                <div className="mt-3 bg-white rounded-lg border border-blue-100 px-3 py-2">
-                                                    <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                    <p className="text-sm font-semibold text-gray-700">
-                                                        <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                        ส่งดอกเบี้ย ({stateManualDesc}) จำนวน {fmtMoney(parseFloat(stateManualAmount))} บาท
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* === โหมดปกติ (ไม่ใช่ภาษี 1%, ปัจจัยยากจน, กสศ., รายได้แผ่นดิน โหมดจ่าย) === */}
-                            {!(addFundType === 'fund-tax') && !(addFundType === 'fund-poor' && addTransactionType === 'expense') && !(addFundType === 'fund-eef' && addTransactionType === 'expense') && !(addFundType === 'fund-state' && addTransactionType === 'expense') && (
-                                <>
-                                    {/* Separator with count */}
-                                    <div className="flex items-center justify-between py-3 border-t border-gray-200 mt-2">
-                                        <span className="text-sm text-gray-400">
-                                            {subItems.length} รายการ
-                                            <span className="text-gray-300 ml-1">• ไม่ใส่เงิน = หัวรายการ</span>
-                                        </span>
-                                        <button type="button" onClick={addSubItem}
-                                            className="text-sm text-blue-500 font-semibold hover:text-blue-700 transition-colors">+ เพิ่มรายการ</button>
-                                    </div>
-
-                                    {/* Sub-items list */}
-                                    <div className="space-y-2 pb-2">
-                                        {subItems.map((s, idx) => {
-                                            const hasAmount = s.amount && parseFloat(s.amount) > 0;
-                                            const isHeader = !hasAmount && s.description;
-                                            return (
-                                                <div key={s.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${isHeader
-                                                    ? 'bg-slate-50 border-slate-200'
-                                                    : 'bg-white border-gray-200 hover:border-blue-300'
-                                                    }`}>
-                                                    {subItems.length > 1 ? (
-                                                        <button type="button" onClick={() => removeSubItem(s.id)}
-                                                            className="w-6 h-6 rounded-full border-2 border-gray-200 flex items-center justify-center shrink-0 hover:border-red-400 hover:bg-red-50 transition-all group">
-                                                            <span className="material-symbols-outlined text-[12px] text-gray-300 group-hover:text-red-400">close</span>
-                                                        </button>
-                                                    ) : (
-                                                        <div className="w-6 h-6 rounded-full border-2 border-blue-500 bg-blue-500 flex items-center justify-center shrink-0">
-                                                            <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <input type="text" value={s.description}
-                                                            onChange={e => updateSub(s.id, 'description', e.target.value)}
-                                                            className={`w-full py-1 text-sm outline-none placeholder:text-gray-300 bg-transparent ${isHeader ? 'font-semibold text-gray-600' : 'font-medium text-gray-900'
-                                                                }`}
-                                                            placeholder={!s.amount ? 'ชื่อหัว/รายการ' : `รายการที่ ${idx + 1}`} />
-                                                    </div>
-                                                    <div className={`flex items-center rounded-lg px-2.5 py-1 border ${hasAmount
-                                                        ? addTransactionType === 'income'
-                                                            ? 'bg-green-50 border-green-200'
-                                                            : 'bg-red-50 border-red-200'
-                                                        : 'bg-gray-50 border-gray-200'
-                                                        }`}>
-                                                        <input type="number" step="0.01" value={s.amount}
-                                                            onChange={e => updateSub(s.id, 'amount', e.target.value)}
-                                                            className={`w-28 py-0.5 text-sm font-bold text-right outline-none bg-transparent ${hasAmount
-                                                                ? addTransactionType === 'income' ? 'text-green-700' : 'text-red-700'
-                                                                : 'text-gray-400'
-                                                                }`}
-                                                            placeholder="จำนวนเงิน" />
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* Payee type selector - expense only */}
-                                    {addTransactionType === 'expense' && (
-                                        <div className="mt-4">
-                                            <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                                ประเภทผู้รับเงิน
-                                                {!addPayeeType && (
-                                                    <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
-                                                )}
-                                            </label>
-                                            <div className="flex gap-2">
-                                                <button type="button" onClick={() => setAddPayeeType('legal')}
-                                                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-2 ${addPayeeType === 'legal'
-                                                        ? 'bg-blue-500 border-blue-500 text-white shadow-sm shadow-blue-200'
-                                                        : addPayeeType === null
-                                                            ? 'bg-white border-dashed border-gray-300 text-gray-400 hover:border-blue-300 hover:text-blue-500'
-                                                            : 'bg-gray-50 border-gray-200 text-gray-400'
-                                                        }`}>
-                                                    <span className="material-symbols-outlined text-base align-middle mr-1">business</span>
-                                                    นิติบุคคล
-                                                </button>
-                                                <button type="button" onClick={() => setAddPayeeType('person')}
-                                                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-2 ${addPayeeType === 'person'
-                                                        ? 'bg-blue-500 border-blue-500 text-white shadow-sm shadow-blue-200'
-                                                        : addPayeeType === null
-                                                            ? 'bg-white border-dashed border-gray-300 text-gray-400 hover:border-blue-300 hover:text-blue-500'
-                                                            : 'bg-gray-50 border-gray-200 text-gray-400'
-                                                        }`}>
-                                                    <span className="material-symbols-outlined text-base align-middle mr-1">person</span>
-                                                    บุคคลธรรมดา
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-
-                            {/* Total */}
-                            {subTotal > 0 && (
-                                <div className="flex justify-between items-center py-3 border-t border-gray-200 mt-2">
-                                    <span className="text-sm font-medium text-gray-500">ยอดรวม</span>
-                                    <span className={`text-lg font-bold ${addTransactionType === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                                        {fmtMoney(subTotal)}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Bottom buttons */}
-                        <div className="px-8 py-4 flex justify-between items-center shrink-0 border-t border-gray-100">
-                            <button type="button" onClick={() => setIsAddOpen(false)}
-                                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors">
-                                ยกเลิก
-                            </button>
-                            <button type="submit"
-                                className={`px-8 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm transition-all ${addTransactionType === 'income' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}>
-                                บันทึก{addTransactionType === 'income' ? 'รายรับ' : 'รายจ่าย'}
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                <CashBookAddModal
+                    isOpen={isAddOpen}
+                    onClose={() => setIsAddOpen(false)}
+                    onTaxWarning={(amount, type) => {
+                        setTaxWarningAmount(amount);
+                        setTaxWarningPayeeType(type);
+                        setShowTaxWarning(true);
+                    }}
+                    initialTransactionType={initialAddType}
+                />
             )}
 
             {/* Carry Forward Modal */}
-            {isCarryForwardOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in max-h-[90vh] flex flex-col">
-                        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-amber-50 shrink-0">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isViewMode ? 'bg-green-100' : 'bg-amber-100'}`}>
-                                    <span className={`material-symbols-outlined ${isViewMode ? 'text-green-700' : 'text-amber-700'}`}>
-                                        {isViewMode ? 'task_alt' : 'input'}
-                                    </span>
-                                </div>
-                                <div>
-                                    <h3 className="text-base font-bold text-gray-900">
-                                        {isViewMode ? `รายการยกยอดมาปี ${fyBE}` : `ยกยอดคงเหลือจากปี ${prevFyBE}`}
-                                    </h3>
-                                    <p className={`text-xs ${isViewMode ? 'text-green-700' : 'text-amber-700'}`}>
-                                        {isViewMode ? `บันทึกแล้ว — ยอดรวม ${fmtMoney(carryForwardItems.reduce((s, i) => s + i.balance, 0))} บาท` : `เข้าปีงบประมาณ ${fyBE}`}
-                                    </p>
-                                </div>
-                            </div>
-                            <button onClick={() => { setIsCarryForwardOpen(false); setIsViewMode(false); }} className="text-gray-400 hover:text-red-500 transition-colors">
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-5 space-y-3">
-                            {carryForwardItems.length === 0 && !isManualMode ? (
-                                <div className="text-center py-8 text-gray-400">
-                                    <span className="material-symbols-outlined text-4xl mb-2 opacity-50">account_balance_wallet</span>
-                                    <p className="text-sm">ไม่พบยอดคงเหลือจากปี {prevFyBE}</p>
-                                    <p className="text-xs mt-1">คุณสามารถกรอกยอดด้วยตัวเองได้</p>
-                                </div>
-                            ) : (
-                                carryForwardItems.map((item, idx) => {
-                                    const alreadyCarried = carriedFundTypes.has(item.fundType);
-                                    return (
-                                        <div key={item.fundType + idx} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${alreadyCarried
-                                            ? 'border-green-200 bg-green-50/50 opacity-70'
-                                            : 'border-gray-200 bg-gray-50/50 hover:border-amber-200'
-                                            }`}>
-                                            <div className="flex-1 min-w-0">
-                                                {isManualMode && !alreadyCarried ? (
-                                                    <select
-                                                        value={item.fundType}
-                                                        onChange={e => {
-                                                            const opt = FUND_TYPE_OPTIONS.find(o => o.value === e.target.value);
-                                                            setCarryForwardItems(prev => prev.map((it, i) => i === idx ? { ...it, fundType: e.target.value, label: opt?.label || e.target.value } : it));
-                                                        }}
-                                                        className="w-full text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-amber-300"
-                                                    >
-                                                        {FUND_TYPE_OPTIONS.filter(o => !carriedFundTypes.has(o.value)).map(o => (
-                                                            <option key={o.value} value={o.value}>{o.label}</option>
-                                                        ))}
-                                                    </select>
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="text-sm font-semibold text-gray-700 truncate">{item.label}</p>
-                                                        {alreadyCarried && (
-                                                            <span className="text-[10px] font-bold text-green-600 bg-green-100 border border-green-200 rounded-full px-2 py-0.5 whitespace-nowrap flex items-center gap-0.5">
-                                                                <span className="material-symbols-outlined text-[11px]">check_circle</span>
-                                                                นำเข้าแล้ว
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                {isManualMode && !alreadyCarried ? (
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={item.balance || ''}
-                                                        onChange={e => setCarryForwardItems(prev => prev.map((it, i) => i === idx ? { ...it, balance: parseFloat(e.target.value) || 0 } : it))}
-                                                        className="w-32 px-3 py-1.5 rounded-lg border border-amber-200 bg-white text-sm font-bold text-right text-amber-700 outline-none focus:border-amber-400"
-                                                        placeholder="0.00"
-                                                    />
-                                                ) : (
-                                                    <span className={`text-sm font-bold px-3 py-1.5 rounded-lg border ${alreadyCarried
-                                                        ? 'text-green-700 bg-green-50 border-green-200'
-                                                        : 'text-amber-700 bg-amber-50 border-amber-200'
-                                                        }`}>
-                                                        {fmtMoney(item.balance)}
-                                                    </span>
-                                                )}
-                                                {isManualMode && !alreadyCarried && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setCarryForwardItems(prev => prev.filter((_, i) => i !== idx))}
-                                                        className="w-7 h-7 rounded-full flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[16px]">close</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-
-                            {isManualMode && (
-                                <button
-                                    type="button"
-                                    onClick={handleAddManualFund}
-                                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-gray-200 text-sm font-semibold text-gray-400 hover:border-amber-300 hover:text-amber-600 transition-colors flex items-center justify-center gap-1"
-                                >
-                                    <span className="material-symbols-outlined text-base">add</span>
-                                    เพิ่มหมวดเงิน
-                                </button>
-                            )}
-
-                            {/* ยอดรวม */}
-                            {carryForwardItems.length > 0 && (
-                                <div className="flex justify-between items-center py-3 border-t border-gray-200 mt-2">
-                                    <span className="text-sm font-medium text-gray-500">ยอดรวมทั้งหมด</span>
-                                    <span className="text-lg font-bold text-amber-700">
-                                        {fmtMoney(carryForwardItems.reduce((s, i) => s + (i.balance || 0), 0))} บาท
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="px-5 py-4 border-t border-gray-100 flex flex-col gap-2 shrink-0 bg-gray-50/50">
-                            {isViewMode ? (
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsCarryForwardOpen(false); setIsViewMode(false); }}
-                                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
-                                >
-                                    ปิด
-                                </button>
-                            ) : (
-                                <>
-                                    {!isManualMode && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setIsManualMode(true);
-                                                if (carryForwardItems.length === 0) {
-                                                    handleAddManualFund();
-                                                }
-                                            }}
-                                            className="w-full py-2.5 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            <span className="material-symbols-outlined text-base">edit_note</span>
-                                            กรอกยอดคงเหลือด้วยตัวเอง
-                                        </button>
-                                    )}
-                                    <div className="flex gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsCarryForwardOpen(false)}
-                                            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
-                                        >
-                                            ยกเลิก
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleCarryForwardConfirm}
-                                            disabled={carryForwardItems.filter(i => i.balance > 0).length === 0}
-                                            className="flex-[2] py-2.5 rounded-xl text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center gap-2"
-                                        >
-                                            <span className="material-symbols-outlined text-base">check</span>
-                                            ยืนยันยกยอด
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
+            <CashBookCarryForwardModal
+                isOpen={isCarryForwardOpen}
+                onClose={() => setIsCarryForwardOpen(false)}
+                fyBE={fyBE}
+                prevFyBE={prevFyBE}
+                isViewMode={isViewMode}
+                isManualMode={isManualMode}
+                carryForwardItems={carryForwardItems}
+                carriedFundTypes={carriedFundTypes}
+                setCarryForwardItems={setCarryForwardItems}
+                setIsManualMode={setIsManualMode}
+                setIsViewMode={setIsViewMode}
+                handleAddManualFund={handleAddManualFund}
+                handleCarryForwardConfirm={handleCarryForwardConfirm}
+            />
 
             {/* Tax Warning Popup */}
             {showTaxWarning && (
@@ -2495,6 +1188,12 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                     </div>
                 </div>
             )}
+
+            {/* Borrow Money Modal */}
+            <BorrowModal
+                isOpen={isBorrowModalOpen}
+                onClose={() => setIsBorrowModalOpen(false)}
+            />
         </div>
     );
 };

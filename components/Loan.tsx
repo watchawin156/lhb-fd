@@ -5,9 +5,35 @@ import { formatThaiDate } from '../utils';
 import { LoanContract } from '../types';
 
 const Loan: React.FC = () => {
-  const { loans, addLoan } = useSchoolData();
+  const { loans, addLoan, repayLoan } = useSchoolData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  // helper to render a simple print view for a loan contract
+  const printLoanDoc = (loan: LoanContract) => {
+      const html = `
+        <html><head><title>สัญญายืมเงิน ${loan.id}</title></head><body>
+        <h1>สัญญายืมเงิน</h1>
+        <p>เลขที่สัญญา: ${loan.id}</p>
+        <p>ผู้ยืม: ${loan.requester}</p>
+        <p>โครงการ/หมวด: ${loan.project || '-'}</p>
+        <p>จำนวนเงิน: ${loan.amount.toLocaleString()}</p>
+        <p>วันที่ยืม: ${loan.dateBorrowed}</p>
+        <p>กำหนดคืน: ${loan.dueDate}</p>
+        <p>สถานะ: ${loan.status}</p>
+        <p>จากหมวด: ${loan.fromFund || '-'}</p>
+        <p>ถึงหมวด: ${loan.toFund || '-'}</p>
+        <hr/>
+        <p>ลงชื่อ ...................................</p>
+        </body></html>`;
+      const w = window.open('', '_blank');
+      if (w) {
+          w.document.write(html);
+          w.document.close();
+          w.focus();
+          w.print();
+      }
+  };
+
   // New Loan Form State
   const [formData, setFormData] = useState<Partial<LoanContract>>({});
 
@@ -134,7 +160,27 @@ const Loan: React.FC = () => {
                                         </span>
                                     )}
                                 </td>
-                                <td className="px-5 py-4 text-right">
+                                <td className="px-5 py-4 text-right flex justify-end gap-2">
+                                    <button
+                                        onClick={() => printLoanDoc(loan)}
+                                        className="text-sm text-gray-700 hover:underline font-medium"
+                                    >
+                                        เอกสาร
+                                    </button>
+                                    {loan.status === 'active' && (
+                                        <button
+                                            onClick={() => {
+                                                const resp = window.prompt(`กรอกจำนวนเงินที่จะคืนสัญญา ${loan.id} (ยอดคงเหลือ ${loan.amount - (loan.returnedAmount || 0)}):`);
+                                                const amt = parseFloat(resp || '0');
+                                                if (amt > 0) {
+                                                    repayLoan(loan.id, Math.min(amt, loan.amount - (loan.returnedAmount || 0)));
+                                                }
+                                            }}
+                                            className="text-sm text-green-600 hover:underline font-medium"
+                                        >
+                                            คืนเงิน
+                                        </button>
+                                    )}
                                     <button className="text-sm text-primary hover:underline font-medium">ติดตาม</button>
                                 </td>
                             </tr>
