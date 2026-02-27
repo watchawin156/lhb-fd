@@ -7,49 +7,49 @@ import { fmtMoney } from './utils';
 interface BorrowModalProps {
     isOpen: boolean;
     onClose: () => void;
-    selectedFundType?: string;
+    needAmount?: number; // จำนวนเงินที่ขาดไป
 }
 
-const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, selectedFundType = 'fund-subsidy' }) => {
+const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount = 0 }) => {
     const { transactions, addLoan, addTransaction, schoolSettings } = useSchoolData();
     
     // Form state
-    const [toBorrowFund, setToBorrowFund] = useState(selectedFundType);
-    const [fromBorrowFund, setFromBorrowFund] = useState('fund-subsidy');
-    const [borrowAmount, setBorrowAmount] = useState('');
+    const [selectedBankId, setSelectedBankId] = useState<string>('');
+    const [borrowAmount, setBorrowAmount] = useState(needAmount.toString());
     const [borrowPurpose, setBorrowPurpose] = useState('');
-    const [autoFill, setAutoFill] = useState(false);
-    const [showPreview, setShowPreview] = useState(false);
+    const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+    const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
 
-    const getFundLabel = (ft: string) => {
-        return FUND_TYPE_OPTIONS.find(o => o.value === ft)?.label?.replace(/^\d+\.?\d*\s*/, '') || ft;
-    };
-
-    // Calculate fund balances
-    const fundBalances = useMemo(() => {
+    // Calculate bank account balances
+    const bankBalances = useMemo(() => {
         const balances: Record<string, number> = {};
-        transactions.forEach(t => {
-            if (!balances[t.fundType]) balances[t.fundType] = 0;
-            balances[t.fundType] += (t.income || 0) - (t.expense || 0);
+        
+        schoolSettings.bankAccounts?.forEach(acc => {
+            const balance = transactions
+                .filter(t => acc.fundTypes.includes(t.fundType))
+                .reduce((sum, t) => sum + (t.income || 0) - (t.expense || 0), 0);
+            balances[acc.id] = balance;
         });
+        
         return balances;
-    }, [transactions]);
+    }, [transactions, schoolSettings.bankAccounts]);
 
-    const fromFundBalance = fundBalances[fromBorrowFund] || 0;
-    const toBorrowBalance = fundBalances[toBorrowFund] || 0;
-    const autoAmount = fromFundBalance > 0 ? fromFundBalance : 0;
-
-    const handleAutoFill = () => {
-        setBorrowAmount(autoAmount.toString());
-        setAutoFill(true);
-    };
+    const selectedBank = schoolSettings.bankAccounts?.find(b => b.id === selectedBankId);
+    const selectedBankBalance = selectedBankId ? bankBalances[selectedBankId] || 0 : 0;
+    const borrowAmountNum = parseFloat(borrowAmount) || 0;
+    const shortfallAmount = Math.max(0, borrowAmountNum - selectedBankBalance);
 
     const handleCreateLoan = async () => {
-        const amount = parseFloat(borrowAmount);
-        if (!amount || amount <= 0) {
+        if (!selectedBankId) {
+            alert('กรุณาเลือกบัญชีเงินฝากที่ต้องการยืม');
+            return;
+        }
+        
+        if (!borrowAmountNum || borrowAmountNum <= 0) {
             alert('กรุณากรอกจำนวนเงิน');
             return;
         }
+        
         if (!borrowPurpose) {
             alert('กรุณากรอกวัตถุประสงค์การยืม');
             return;
@@ -62,73 +62,135 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, selectedFund
             id: loanId,
             requester: schoolSettings.financeOfficerName || 'เจ้าหน้าที่การเงิน',
             project: borrowPurpose,
-            amount: amount,
+            amount: borrowAmountNum,
             dateBorrowed: today,
             dueDate: today,
             status: 'active' as const,
-            fromFund: fromBorrowFund,
-            toFund: toBorrowFund,
+            fromFund: selectedBank?.name || selectedBankId,
+            toFund: borrowPurpose,
             returnedAmount: 0,
+            bankId: selectedBankId,
         };
 
-        // Add loan to context
-        addLoan(newLoan);
-
-        // Create transactions for the borrowed amount
-        // Deduct from source fund
         try {
+            setIsGeneratingPDF(true);
+            
+            // Add loan to context
+            addLoan(newLoan);
+
+            // Create transaction for borrowed amount
             await addTransaction({
                 id: Date.now(),
                 date: today,
                 docNo: loanId,
-                description: `ยืมให้หมวด ${getFundLabel(toBorrowFund)}`,
-                fundType: fromBorrowFund,
-                income: 0,
-                expense: amount,
-                skipLoanCheck: true,
-            });
-
-            // Add to destination fund
-            await addTransaction({
-                id: Date.now() + 1,
-                date: today,
-                docNo: loanId,
-                description: `ยืมจากหมวด ${getFundLabel(fromBorrowFund)}`,
-                fundType: toBorrowFund,
-                income: amount,
+                description: `ยืมเงินจากบัญชี ${selectedBank?.name || 'ระบุเพิ่มเติม'} เพื่อ ${borrowPurpose}`,
+                fundType: selectedBank?.fundTypes[0] || 'fund-subsidy',
+                income: borrowAmountNum,
                 expense: 0,
+                bankId: selectedBankId,
                 skipLoanCheck: true,
             });
+
+            // Generate PDF as blob
+            const pdfBytes = await buildLoanDocPDF(newLoan, false, schoolSettings, today);
+            const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            setPdfBlobUrl(url);
+
+            setIsGeneratingPDF(false);
         } catch (e) {
-            console.warn('Transaction creation error', e);
+            console.warn('Error creating loan', e);
+            setIsGeneratingPDF(false);
+            alert('เกิดข้อผิดพลาดในการสร้างสัญญา: ' + String(e));
         }
+    };
 
-        // Generate and print PDF
-        try {
-            await buildLoanDocPDF(newLoan, false, schoolSettings, today);
-        } catch (e) {
-            console.warn('PDF generation error (non-blocking)', e);
+    const handleDownloadPDF = () => {
+        if (pdfBlobUrl) {
+            const a = document.createElement('a');
+            a.href = pdfBlobUrl;
+            a.download = `loan-${new Date().toISOString().slice(0, 10)}.pdf`;
+            a.click();
+            
+            // Reset and close
+            setBorrowAmount(needAmount.toString());
+            setBorrowPurpose('');
+            setSelectedBankId('');
+            setPdfBlobUrl(null);
+            onClose();
         }
-
-        // Reset form
-        setBorrowAmount('');
-        setBorrowPurpose('');
-        setAutoFill(false);
-        onClose();
-
-        alert(`สร้างสัญญายืมเงิน ${loanId} สำเร็จ และบันทึกรายการแล้ว`);
     };
 
     if (!isOpen) return null;
 
+    // If PDF was generated, show download screen
+    if (pdfBlobUrl) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+                    <div className="px-6 pt-5 pb-3 flex justify-between items-start bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-green-600">check_circle</span>
+                                สร้างเอกสารสำเร็จ
+                            </h2>
+                            <p className="text-xs text-gray-600 mt-1">เอกสารการยืมเงินพร้อมสำหรับดาวน์โหลด</p>
+                        </div>
+                    </div>
+
+                    <div className="px-6 py-6 text-center space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto">
+                            <span className="material-symbols-outlined text-4xl text-green-600">check</span>
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-lg font-bold text-gray-900">ยืมเงินสำเร็จ</p>
+                            <p className="text-sm text-gray-600">จำนวนเงิน: <span className="font-bold text-lg text-green-600">{fmtMoney(borrowAmountNum)} บาท</span></p>
+                            <p className="text-sm text-gray-600">วัตถุประสงค์: <span className="font-semibold">{borrowPurpose}</span></p>
+                        </div>
+
+                        {borrowAmountNum > selectedBankBalance && (
+                            <div className="bg-amber-50 border border-amber-300 rounded-lg p-3">
+                                <p className="text-sm text-amber-900">
+                                    <span className="font-semibold">⚠️ จำนวนเงินที่ขาดไป:</span><br/>
+                                    {fmtMoney(shortfallAmount)} บาท
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-1">
+                            <p className="text-xs text-gray-600">บัญชี: {selectedBank?.name}</p>
+                            <p className="text-xs text-gray-600">วันที่: {new Date().toLocaleDateString('th-TH')}</p>
+                        </div>
+                    </div>
+
+                    <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex gap-2">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-2.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold transition-colors"
+                        >
+                            ปิด
+                        </button>
+                        <button
+                            onClick={handleDownloadPDF}
+                            className="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors flex items-center justify-center gap-2"
+                        >
+                            <span className="material-symbols-outlined text-base">download</span>
+                            ดาวน์โหลด PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
                 {/* Header */}
                 <div className="px-6 pt-5 pb-3 flex justify-between items-start bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900">ขอยืมเงินระหว่างกองทุน</h2>
-                        <p className="text-xs text-gray-500 mt-1">เลือกกองทุนต้นทาง และกำหนดจำนวนเงิน</p>
+                        <h2 className="text-lg font-bold text-gray-900">ขอยืมเงิน</h2>
+                        <p className="text-xs text-gray-600 mt-1">เลือกบัญชีและระบุจำนวนเงิน</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -140,74 +202,71 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, selectedFund
 
                 {/* Content */}
                 <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
-                    {/* ยืมไปยังกองทุน */}
+                    {/* Select Bank Account */}
                     <div>
                         <label className="text-sm font-semibold text-gray-700 block mb-2">
-                            🎯 ยืมไปยังกองทุน (ปลายทาง)
+                            🏦 เลือกบัญชีเงินฝากที่มื่อให้ยืม
                         </label>
                         <select
-                            value={toBorrowFund}
-                            onChange={(e) => setToBorrowFund(e.target.value)}
-                            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                            value={selectedBankId}
+                            onChange={(e) => setSelectedBankId(e.target.value)}
+                            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm font-medium outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
                         >
-                            {FUND_TYPE_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                    {opt.label} (คงเหลือ {fmtMoney(fundBalances[opt.value] || 0)} ฿)
+                            <option value="">-- เลือกบัญชี --</option>
+                            {schoolSettings.bankAccounts?.map((bank) => (
+                                <option key={bank.id} value={bank.id}>
+                                    {bank.name} (คงเหลือ {fmtMoney(bankBalances[bank.id] || 0)} ฿)
                                 </option>
                             ))}
                         </select>
                     </div>
 
-                    {/* ยืมจากกองทุน */}
-                    <div>
-                        <label className="text-sm font-semibold text-gray-700 block mb-2">
-                            ✈️ ยืมจากกองทุน (ต้นทาง)
-                        </label>
-                        <select
-                            value={fromBorrowFund}
-                            onChange={(e) => setFromBorrowFund(e.target.value)}
-                            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm outline-none focus:border-green-400 focus:ring-2 focus:ring-green-100 transition-all"
-                        >
-                            {FUND_TYPE_OPTIONS.filter((opt) => opt.value !== toBorrowFund).map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                    {opt.label} (คงเหลือ {fmtMoney(fundBalances[opt.value] || 0)} ฿)
-                                </option>
-                            ))}
-                        </select>
-                        {fromFundBalance <= 0 && (
-                            <p className="text-xs text-red-600 mt-2">⚠️ ยอดคงเหลือในกองทุนนี้อาจไม่เพียงพอ ระบบจะจัดการอัตโนมัติ</p>
-                        )}
-                    </div>
+                    {/* Bank Details */}
+                    {selectedBank && (
+                        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 space-y-2">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-sm font-semibold text-blue-900">บัญชี</p>
+                                    <p className="text-xs text-blue-700">{selectedBank.name}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-sm font-semibold text-blue-900">คงเหลือ</p>
+                                    <p className="text-lg font-bold text-blue-700">{fmtMoney(selectedBankBalance)}</p>
+                                </div>
+                            </div>
+                            <div className="text-xs text-blue-600">
+                                <p>ธนาคาร: {selectedBank.bankName}</p>
+                                <p>บัญชีเลขที่: {selectedBank.accountNo}</p>
+                            </div>
+                        </div>
+                    )}
 
-                    {/* จำนวนเงิน */}
+                    {/* Borrow Amount */}
                     <div>
                         <label className="text-sm font-semibold text-gray-700 block mb-2">
                             💰 จำนวนเงินที่ต้องการยืม
                         </label>
-                        <div className="flex gap-2">
-                            <input
-                                type="number"
-                                step="0.01"
-                                value={borrowAmount}
-                                onChange={(e) => {
-                                    setBorrowAmount(e.target.value);
-                                    setAutoFill(false);
-                                }}
-                                placeholder="0.00"
-                                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-base font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all text-right"
-                            />
-                            <button
-                                onClick={handleAutoFill}
-                                type="button"
-                                className="px-4 py-2.5 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold text-sm whitespace-nowrap transition-colors"
-                            >
-                                ใช้ยอดคงเหลือ ({fmtMoney(autoAmount)} ฿)
-                            </button>
-                        </div>
-                        <span className="text-xs text-gray-500 mt-1 block">บาท</span>
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={borrowAmount}
+                            onChange={(e) => setBorrowAmount(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-base font-bold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all text-right"
+                        />
+                        <p className="text-xs text-gray-500 mt-2">บาท</p>
                     </div>
 
-                    {/* วัตถุประสงค์ */}
+                    {/* Shortfall Warning */}
+                    {borrowAmountNum > selectedBankBalance && selectedBank && (
+                        <div className="bg-amber-50 border-l-4 border-amber-500 rounded-lg p-4">
+                            <p className="text-sm font-semibold text-amber-900 mb-1">⚠️ จำนวนเงินที่ขาดไป</p>
+                            <p className="text-lg font-bold text-amber-700">{fmtMoney(shortfallAmount)} บาท</p>
+                            <p className="text-xs text-amber-600 mt-2">บัญชีนี้มีเงินคงเหลือไม่เพียงพอ</p>
+                        </div>
+                    )}
+
+                    {/* Purpose */}
                     <div>
                         <label className="text-sm font-semibold text-gray-700 block mb-2">
                             📝 วัตถุประสงค์การยืม
@@ -221,15 +280,23 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, selectedFund
                         />
                     </div>
 
-                    {/* Summary Info */}
-                    {borrowAmount && parseFloat(borrowAmount) > 0 && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
-                            <p className="text-sm font-medium text-amber-900">📌 สรุปข้อมูลการยืม</p>
-                            <div className="text-xs text-amber-800 space-y-1">
-                                <p>ยืมจาก: <span className="font-semibold">{getFundLabel(fromBorrowFund)}</span></p>
-                                <p>ยืมให้: <span className="font-semibold">{getFundLabel(toBorrowFund)}</span></p>
-                                <p>จำนวนเงิน: <span className="font-semibold text-lg">{fmtMoney(parseFloat(borrowAmount))} บาท</span></p>
-                                <p>วัตถุประสงค์: <span className="font-semibold">{borrowPurpose || '(ไม่ระบุ)'}</span></p>
+                    {/* Summary */}
+                    {borrowAmountNum > 0 && selectedBank && (
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-2 border border-gray-200">
+                            <p className="text-xs font-semibold text-gray-600 uppercase">สรุปการยืม</p>
+                            <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">บัญชี:</span>
+                                    <span className="font-semibold text-gray-900">{selectedBank.name}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">ยืมจำนวน:</span>
+                                    <span className="font-bold text-lg text-blue-600">{fmtMoney(borrowAmountNum)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">วัตถุประสงค์:</span>
+                                    <span className="font-semibold text-gray-900 text-right max-w-xs">{borrowPurpose || '-'}</span>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -245,11 +312,20 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, selectedFund
                     </button>
                     <button
                         onClick={handleCreateLoan}
-                        disabled={!borrowAmount || parseFloat(borrowAmount) <= 0 || !borrowPurpose}
+                        disabled={!selectedBankId || !borrowAmountNum || borrowAmountNum <= 0 || !borrowPurpose || isGeneratingPDF}
                         className="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold transition-colors flex items-center justify-center gap-2"
                     >
-                        <span className="material-symbols-outlined text-base">check_circle</span>
-                        สร้างสัญญายืม
+                        {isGeneratingPDF ? (
+                            <>
+                                <span className="material-symbols-outlined text-base animate-spin">hourglass_empty</span>
+                                กำลังสร้าง...
+                            </>
+                        ) : (
+                            <>
+                                <span className="material-symbols-outlined text-base">check_circle</span>
+                                ยืมเงิน
+                            </>
+                        )}
                     </button>
                 </div>
             </div>

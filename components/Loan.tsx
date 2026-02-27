@@ -4,9 +4,15 @@ import { useSchoolData } from '../context/SchoolContext';
 import { formatThaiDate } from '../utils';
 import { LoanContract } from '../types';
 
+const fmtMoney = (n: number) =>
+  n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const Loan: React.FC = () => {
   const { loans, addLoan, repayLoan } = useSchoolData();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
+  const [returnAmount, setReturnAmount] = useState('');
   
   // helper to render a simple print view for a loan contract
   const printLoanDoc = (loan: LoanContract) => {
@@ -60,6 +66,32 @@ const Loan: React.FC = () => {
       addLoan(newLoan);
       setIsModalOpen(false);
       setFormData({});
+  };
+
+  const handleReturnMoney = () => {
+    if (!selectedLoanId) return;
+    
+    const loan = loans.find(l => l.id === selectedLoanId);
+    if (!loan) return;
+
+    const amount = parseFloat(returnAmount);
+    const outstanding = loan.amount - (loan.returnedAmount || 0);
+
+    if (!amount || amount <= 0) {
+      alert('กรุณากรอกจำนวนเงิน');
+      return;
+    }
+
+    if (amount > outstanding) {
+      alert(`จำนวนเงินไม่ควรเกินยอดคงค้าง ${fmtMoney(outstanding)} บาท`);
+      return;
+    }
+
+    repayLoan(selectedLoanId, amount);
+    setReturnModalOpen(false);
+    setReturnAmount('');
+    setSelectedLoanId(null);
+    alert(`คืนเงินสำเร็จ ${fmtMoney(amount)} บาท`);
   };
 
   const activeLoansValue = loans.filter(l => l.status === 'active' || l.status === 'overdue').reduce((acc, l) => acc + l.amount, 0);
@@ -170,11 +202,9 @@ const Loan: React.FC = () => {
                                     {loan.status === 'active' && (
                                         <button
                                             onClick={() => {
-                                                const resp = window.prompt(`กรอกจำนวนเงินที่จะคืนสัญญา ${loan.id} (ยอดคงเหลือ ${loan.amount - (loan.returnedAmount || 0)}):`);
-                                                const amt = parseFloat(resp || '0');
-                                                if (amt > 0) {
-                                                    repayLoan(loan.id, Math.min(amt, loan.amount - (loan.returnedAmount || 0)));
-                                                }
+                                                setSelectedLoanId(loan.id);
+                                                setReturnAmount('');
+                                                setReturnModalOpen(true);
                                             }}
                                             className="text-sm text-green-600 hover:underline font-medium"
                                         >
@@ -235,6 +265,84 @@ const Loan: React.FC = () => {
               </div>
           </div>
       )}
+
+      {/* Return Money Modal */}
+      {returnModalOpen && selectedLoanId && (() => {
+        const loan = loans.find(l => l.id === selectedLoanId);
+        if (!loan) return null;
+        const outstanding = loan.amount - (loan.returnedAmount || 0);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white dark:bg-surface-dark rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-scale-in">
+                  <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-green-50 dark:bg-green-900/20 shrink-0">
+                      <div>
+                          <h3 className="text-lg font-bold text-green-700 dark:text-green-400">คืนเงิน</h3>
+                          <p className="text-xs text-text-muted">สัญญา {loan.id}</p>
+                      </div>
+                      <button onClick={() => setReturnModalOpen(false)} className="text-text-muted hover:text-red-500 transition-colors">
+                          <span className="material-symbols-outlined">close</span>
+                      </button>
+                  </div>
+                  <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+                      <div className="space-y-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                          <div className="flex justify-between items-center">
+                              <span className="text-xs text-text-muted">ผู้ยืม:</span>
+                              <span className="font-semibold text-text dark:text-text-dark">{loan.requester}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                              <span className="text-xs text-text-muted">โครงการ:</span>
+                              <span className="font-semibold text-text dark:text-text-dark">{loan.project}</span>
+                          </div>
+                          <div className="border-t border-gray-200 dark:border-gray-700 pt-3 flex justify-between items-center">
+                              <span className="text-xs text-text-muted">จำนวนยืมทั้งหมด:</span>
+                              <span className="font-bold text-lg text-text dark:text-text-dark">฿{loan.amount.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                              <span className="text-xs text-text-muted">คืนแล้ว:</span>
+                              <span className="font-semibold text-text dark:text-text-dark">฿{(loan.returnedAmount || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700/50 rounded-lg p-3 flex justify-between items-center">
+                              <span className="text-xs font-semibold text-amber-900 dark:text-amber-200">ยอดคงค้าง:</span>
+                              <span className="font-bold text-lg text-amber-700 dark:text-amber-300">฿{outstanding.toLocaleString()}</span>
+                          </div>
+                      </div>
+                      <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-text-muted">จำนวนเงินที่จะคืน</label>
+                          <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted font-medium">฿</span>
+                              <input 
+                                  type="number" 
+                                  value={returnAmount}
+                                  onChange={(e) => setReturnAmount(e.target.value)}
+                                  max={outstanding}
+                                  step="0.01"
+                                  className="w-full p-2.5 pl-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-surface-dark outline-none focus:border-green-500" 
+                                  placeholder="0.00" 
+                              />
+                          </div>
+                          <div className="text-xs text-text-muted">สูงสุด: ฿{outstanding.toLocaleString()}</div>
+                      </div>
+                      <div className="pt-4 flex gap-3">
+                          <button 
+                              type="button" 
+                              onClick={() => setReturnModalOpen(false)} 
+                              className="flex-1 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-text-muted font-medium"
+                          >
+                              ยกเลิก
+                          </button>
+                          <button 
+                              type="button" 
+                              onClick={handleReturnMoney} 
+                              className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg shadow-green-500/30"
+                          >
+                              ยืนยันคืนเงิน
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
