@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   Receipt,
   LoanContract,
@@ -79,6 +79,18 @@ interface SchoolContextType {
 
 const SchoolContext = createContext<SchoolContextType | undefined>(undefined);
 
+type BorrowDonorOption = {
+  fundType: string;
+  balance: number;
+};
+
+type BorrowDonorPromptState = {
+  targetFund: string;
+  shortfall: number;
+  options: BorrowDonorOption[];
+  selectedDonor: string;
+};
+
 // ========================================
 // Provider
 // ========================================
@@ -92,6 +104,8 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [schoolSettings, setSchoolSettings] = useState<SchoolSettingsData>(DEFAULT_SETTINGS);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [borrowDonorPrompt, setBorrowDonorPrompt] = useState<BorrowDonorPromptState | null>(null);
+  const borrowDonorResolverRef = useRef<((value: { donor?: string; cancelled?: boolean }) => void) | null>(null);
 
   // ========================================
   // Load data from D1 on mount
@@ -228,11 +242,28 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       .reduce((acc, t) => acc + (t.income || 0) - (t.expense || 0), 0);
   };
 
-  const pickBorrowDonorFund = (
+  const resolveBorrowDonorPrompt = (value: { donor?: string; cancelled?: boolean }) => {
+    if (borrowDonorResolverRef.current) {
+      borrowDonorResolverRef.current(value);
+      borrowDonorResolverRef.current = null;
+    }
+    setBorrowDonorPrompt(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (borrowDonorResolverRef.current) {
+        borrowDonorResolverRef.current({ cancelled: true });
+        borrowDonorResolverRef.current = null;
+      }
+    };
+  }, []);
+
+  const pickBorrowDonorFund = async (
     targetFund: string,
     shortfall: number,
     fundBalances: Record<string, number>
-  ): { donor?: string; cancelled?: boolean } => {
+  ): Promise<{ donor?: string; cancelled?: boolean }> => {
     const candidates = Object.entries(fundBalances)
       .filter(([ft, bal]) => ft !== targetFund && bal > 0)
       .sort((a, b) => b[1] - a[1]);
@@ -241,29 +272,20 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const enoughCandidates = candidates.filter(([, bal]) => bal >= shortfall);
     const displayCandidates = enoughCandidates.length > 0 ? enoughCandidates : candidates;
+    const options = displayCandidates.map(([fundType, balance]) => ({ fundType, balance }));
 
-    const listText = displayCandidates
-      .map(([ft, bal], idx) => (
-        `${idx + 1}. ${getFundTitle(ft)} (คงเหลือ ${bal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท)`
-      ))
-      .join('\n');
-
-    const answer = window.prompt(
-      `ยอดรายจ่ายของ ${getFundTitle(targetFund)} ไม่พอ\nขาดอีก ${shortfall.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท\n\nเลือกหมวดที่จะยืมจากรายการด้านล่าง (ใส่เลขลำดับ)\n${listText}`,
-      '1'
-    );
-
-    if (answer === null) return { cancelled: true };
-
-    const index = Number.parseInt(answer, 10);
-    if (!Number.isNaN(index) && index >= 1 && index <= displayCandidates.length) {
-      return { donor: displayCandidates[index - 1][0] };
-    }
-
-    const byCode = displayCandidates.find(([ft]) => ft === answer.trim());
-    if (byCode) return { donor: byCode[0] };
-
-    return { donor: displayCandidates[0][0] };
+    return new Promise((resolve) => {
+      if (borrowDonorResolverRef.current) {
+        borrowDonorResolverRef.current({ cancelled: true });
+      }
+      borrowDonorResolverRef.current = resolve;
+      setBorrowDonorPrompt({
+        targetFund,
+        shortfall,
+        options,
+        selectedDonor: options[0]?.fundType || '',
+      });
+    });
   };
 
   // helper to add to D1 & state without triggering the loan checks again
@@ -366,7 +388,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (!fundBalances[t.fundType]) fundBalances[t.fundType] = 0;
             fundBalances[t.fundType] += (t.income || 0) - (t.expense || 0);
           });
-          const picked = pickBorrowDonorFund(tx.fundType, shortfall, fundBalances);
+          const picked = await pickBorrowDonorFund(tx.fundType, shortfall, fundBalances);
           if (picked.cancelled) {
             alert('ยกเลิกการบันทึกรายจ่าย เพราะยังไม่ได้เลือกหมวดที่จะยืม');
             return;
@@ -446,7 +468,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (!fundBalances[t.fundType]) fundBalances[t.fundType] = 0;
           fundBalances[t.fundType] += (t.income || 0) - (t.expense || 0);
         });
-        const picked = pickBorrowDonorFund(merged.fundType, shortfall, fundBalances);
+        const picked = await pickBorrowDonorFund(merged.fundType, shortfall, fundBalances);
         if (picked.cancelled) {
           alert('ยกเลิกการแก้ไขรายการ เพราะยังไม่ได้เลือกหมวดที่จะยืม');
           return;
@@ -590,6 +612,70 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       cashOnHand,
     }}>
       {children}
+      {borrowDonorPrompt && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl border border-gray-200">
+            <div className="px-5 py-4 border-b border-gray-200">
+              <h3 className="text-base font-bold text-gray-900">เลือกแหล่งเงินที่จะยืม</h3>
+              <p className="mt-1 text-sm text-gray-600">
+                ยอดจ่ายของ {getFundTitle(borrowDonorPrompt.targetFund)} ไม่พออีก{' '}
+                {borrowDonorPrompt.shortfall.toLocaleString('th-TH', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{' '}
+                บาท
+              </p>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <label htmlFor="borrow-donor-select" className="block text-sm font-medium text-gray-700">
+                เลือกหมวดเงินต้นทาง
+              </label>
+              <select
+                id="borrow-donor-select"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                value={borrowDonorPrompt.selectedDonor}
+                onChange={(e) => {
+                  const donor = e.target.value;
+                  setBorrowDonorPrompt((prev) => (prev ? { ...prev, selectedDonor: donor } : prev));
+                }}
+              >
+                {borrowDonorPrompt.options.map((option) => (
+                  <option key={option.fundType} value={option.fundType}>
+                    {getFundTitle(option.fundType)} (คงเหลือ{' '}
+                    {option.balance.toLocaleString('th-TH', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{' '}
+                    บาท)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                onClick={() => resolveBorrowDonorPrompt({ cancelled: true })}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                onClick={() => {
+                  if (!borrowDonorPrompt.selectedDonor) {
+                    alert('กรุณาเลือกหมวดเงินที่จะยืม');
+                    return;
+                  }
+                  resolveBorrowDonorPrompt({ donor: borrowDonorPrompt.selectedDonor });
+                }}
+              >
+                ตกลง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </SchoolContext.Provider>
   );
 };
