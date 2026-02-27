@@ -10,7 +10,7 @@ interface CashBookDetailModalProps {
 }
 
 const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClose, txId }) => {
-    const { transactions, editTransaction, deleteTransaction } = useSchoolData();
+    const { transactions, editTransaction, deleteTransaction, loans, repayLoan } = useSchoolData();
     const [isEditingTx, setIsEditingTx] = useState(false);
     const [showDeletePrompt, setShowDeletePrompt] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -199,6 +199,27 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                             ))}
                         </div>
                         <div className="flex gap-2">
+                            {selectedTx.docNo?.startsWith('LN-') && (
+                                <button
+                                    onClick={() => {
+                                        const loan = loans.find(l => l.id === selectedTx.docNo);
+                                        if (!loan) {
+                                            alert('ไม่พบสัญญายืม');
+                                            return;
+                                        }
+                                        const outstanding = loan.amount - (loan.returnedAmount || 0);
+                                        const resp = window.prompt(`กรอกจำนวนเงินที่จะคืนสัญญา ${loan.id} (ยอดคงเหลือ ${fmtMoney(outstanding)}):`);
+                                        const amt = parseFloat(resp || '0');
+                                        if (amt > 0) {
+                                            repayLoan(loan.id, Math.min(amt, outstanding));
+                                            onClose();
+                                        }
+                                    }}
+                                    className="flex-1 py-2 rounded-xl text-sm font-semibold text-green-600 bg-green-50 hover:bg-green-100 flex items-center justify-center gap-1"
+                                >
+                                    <span className="material-symbols-outlined text-base">paid</span> คืนเงิน
+                                </button>
+                            )}
                             <button onClick={() => setIsEditingTx(true)}
                                 className="flex-1 py-2 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 flex items-center justify-center gap-1">
                                 <span className="material-symbols-outlined text-base">edit</span> แก้ไข

@@ -3,6 +3,7 @@ import { useSchoolData } from '../../context/SchoolContext';
 import { FUND_TYPE_OPTIONS } from '../../utils';
 import ThaiDatePicker from '../ThaiDatePicker';
 import { fmtShort, fmtMoney } from './utils';
+import { buildLoanDocPDF } from '../loanPdfBuilder';
 
 interface CashBookAddModalProps {
     isOpen: boolean;
@@ -12,10 +13,19 @@ interface CashBookAddModalProps {
 }
 
 const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, onTaxWarning, initialTransactionType = 'income' }) => {
-    const { transactions, addTransaction, schoolSettings } = useSchoolData();
+    const { transactions, addTransaction, schoolSettings, addLoan } = useSchoolData();
 
     const [addTransactionType, setAddTransactionType] = useState<'income' | 'expense'>(initialTransactionType);
     const [isGroupMode, setIsGroupMode] = useState(false);
+    
+    // Borrow Mode - ยืมเงิน within the modal
+    const [showBorrowMode, setShowBorrowMode] = useState(false);
+    const [borrowFromFund, setBorrowFromFund] = useState('');
+    const [borrowAmount, setBorrowAmount] = useState('');
+    const [borrowPurpose, setBorrowPurpose] = useState('');
+    const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+    const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+    const [borrowSubmitted, setBorrowSubmitted] = useState(false);
 
     // Shared header fields
     const [addDate, setAddDate] = useState(new Date().toISOString().slice(0, 10));
@@ -150,8 +160,105 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         return sum + (isNaN(v) ? 0 : v);
     }, 0);
 
+    // Calculate fund balance for borrow mode
+    const fundBalance = useMemo(() => {
+        if (!borrowFromFund) return 0;
+        return transactions
+            .filter(t => t.fundType === borrowFromFund)
+            .reduce((sum, t) => sum + (t.income || 0) - (t.expense || 0), 0);
+    }, [transactions, borrowFromFund]);
+
+    const borrowAmountNum = parseFloat(borrowAmount) || 0;
+    const shortfallAmount = Math.max(0, borrowAmountNum - fundBalance);
+
+    const handleBorrowSubmit = async () => {
+        if (!borrowFromFund) {
+            alert('กรุณาเลือกกองทุนต้นทาง');
+            return;
+        }
+        
+        if (!borrowAmountNum || borrowAmountNum <= 0) {
+            alert('กรุณากรอกจำนวนเงิน');
+            return;
+        }
+        
+        if (!borrowPurpose) {
+            alert('กรุณากรอกวัตถุประสงค์การยืม');
+            return;
+        }
+
+        const loanId = `LN-${new Date().getFullYear() + 543}-${String(new Date().getTime()).slice(-6)}`;
+        const today = new Date().toISOString().slice(0, 10);
+
+        const newLoan = {
+            id: loanId,
+            requester: schoolSettings.financeOfficerName || 'เจ้าหน้าที่การเงิน',
+            project: borrowPurpose,
+            amount: borrowAmountNum,
+            dateBorrowed: today,
+            dueDate: today,
+            status: 'active' as const,
+            fromFund: borrowFromFund,
+            toFund: borrowPurpose,
+            returnedAmount: 0,
+        };
+
+        try {
+            setIsGeneratingPDF(true);
+            
+            // Add loan to context
+            addLoan(newLoan);
+
+            // Create transaction for borrowed amount
+            await addTransaction({
+                id: Date.now(),
+                date: today,
+                docNo: loanId,
+                description: `ยืมเงินจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
+                fundType: borrowFromFund,
+                income: borrowAmountNum,
+                expense: 0,
+                skipLoanCheck: true,
+            });
+
+            // Generate PDF as blob
+            const pdfBytes = await buildLoanDocPDF(newLoan, false, schoolSettings, today);
+            const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            setPdfBlobUrl(url);
+            setBorrowSubmitted(true);
+
+            setIsGeneratingPDF(false);
+        } catch (e) {
+            console.warn('Error creating loan', e);
+            setIsGeneratingPDF(false);
+            alert('เกิดข้อผิดพลาดในการสร้างสัญญา: ' + String(e));
+        }
+    };
+
+    const handleDownloadBorrowPDF = () => {
+        if (pdfBlobUrl) {
+            const a = document.createElement('a');
+            a.href = pdfBlobUrl;
+            a.download = `loan-${new Date().toISOString().slice(0, 10)}.pdf`;
+            a.click();
+            
+            // Reset borrow mode
+            setBorrowAmount('');
+            setBorrowPurpose('');
+            setSelectedBankId('');
+            setPdfBlobUrl(null);
+            setBorrowSubmitted(false);
+            setShowBorrowMode(false);
+        }
+    };
+
     const handleAddSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (showBorrowMode) {
+            handleBorrowSubmit();
+            return;
+        }
 
         // === โหมดกลุ่ม ===
         if (isGroupMode) {
@@ -573,23 +680,55 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     <div className="flex justify-between items-center mb-2">
                         <div>
                             <p className="text-sm text-gray-400">สมุดเงินสด</p>
-                            <h2 className="text-2xl font-bold text-gray-900">เพิ่มรายการ</h2>
+                            <h2 className="text-2xl font-bold text-gray-900">
+                                {showBorrowMode ? 'ยืมเงิน' : 'เพิ่มรายการ'}
+                            </h2>
                         </div>
                         <div className="flex items-center gap-2">
-                            {/* สวิตช์ รายการเดียว/กลุ่ม */}
-                            <span className={`text-xs font-semibold ${!isGroupMode ? 'text-blue-600' : 'text-gray-300'}`}>เดี่ยว</span>
-                            <button type="button"
-                                onClick={() => setIsGroupMode(!isGroupMode)}
-                                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${isGroupMode ? 'bg-purple-500' : 'bg-blue-500'}`}>
-                                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isGroupMode ? 'translate-x-[22px]' : 'translate-x-0.5'}`}></div>
+                            {/* Transaction Type Toggle or Borrow Toggle */}
+                            {!showBorrowMode ? (
+                                <>
+                                    {/* สวิตช์ รายการเดียว/กลุ่ม */}
+                                    <span className={`text-xs font-semibold ${!isGroupMode ? 'text-blue-600' : 'text-gray-300'}`}>เดี่ยว</span>
+                                    <button type="button"
+                                        onClick={() => setIsGroupMode(!isGroupMode)}
+                                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${isGroupMode ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                                        <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isGroupMode ? 'translate-x-[22px]' : 'translate-x-0.5'}`}></div>
+                                    </button>
+                                    <span className={`text-xs font-semibold ${isGroupMode ? 'text-purple-600' : 'text-gray-300'}`}>กลุ่ม</span>
+                                    <span className="mx-1 text-gray-200">|</span>
+                                </>
+                            ) : null}
+                            
+                            {/* Borrow Toggle Button */}
+                            <button type="button" 
+                                onClick={() => {
+                                    if (showBorrowMode) {
+                                        setShowBorrowMode(false);
+                                        setBorrowAmount('');
+                                        setBorrowPurpose('');
+                                        setSelectedBankId('');
+                                        setPdfBlobUrl(null);
+                                        setBorrowSubmitted(false);
+                                    } else {
+                                        setShowBorrowMode(true);
+                                    }
+                                }}
+                                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                                    showBorrowMode 
+                                        ? 'bg-orange-500 text-white' 
+                                        : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                }`}>
+                                <span className="material-symbols-outlined text-sm">currency_exchange</span>
+                                {showBorrowMode ? 'ยืมเงิน' : 'ยืม'}
                             </button>
-                            <span className={`text-xs font-semibold ${isGroupMode ? 'text-purple-600' : 'text-gray-300'}`}>กลุ่ม</span>
-                            <span className="mx-1 text-gray-200">|</span>
+
                             <button type="button" onClick={onClose}
                                 className="text-blue-500 hover:text-blue-700 text-sm font-semibold">ปิด</button>
                         </div>
                     </div>
-                    {/* สวิตช์ รับ/จ่าย (แยกแถวใหม่) */}
+                    {/* Expense Type Toggle */}
+                    {!showBorrowMode && (
                     <div className="flex gap-2 mt-2">
                         <button type="button" onClick={() => setAddTransactionType('income')}
                             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border-2 flex items-center justify-center gap-1 ${addTransactionType === 'income'
@@ -604,11 +743,87 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                             <span className="material-symbols-outlined text-base">arrow_upward</span> รายจ่าย
                         </button>
                     </div>
+                    )}
                 </div>
 
                 {/* Scrollable content */}
                 <div className="flex-1 overflow-y-auto px-8">
 
+                    {/* Borrow UI */}
+                    {showBorrowMode && !borrowSubmitted && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label className="text-sm font-medium text-gray-500 mb-1 block">ยืมจากกองทุน</label>
+                                    <select value={borrowFromFund} onChange={e => setBorrowFromFund(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white outline-none focus:border-blue-400 transition-colors">
+                                        <option value="">-- เลือกกองทุนต้นทาง --</option>
+                                        {FUND_TYPE_OPTIONS.map(opt => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium text-gray-500 mb-1 block">ยอดคงเหลือ</label>
+                                    <p className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200"><span className="font-semibold">฿{fmtMoney(fundBalance)}</span></p>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium text-gray-500 mb-1 block">จำนวนเงินที่จะยืม</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">฿</span>
+                                        <input type="number" value={borrowAmount} onChange={e => setBorrowAmount(e.target.value)}
+                                            className="w-full pl-8 px-4 py-3 rounded-xl border border-gray-200 bg-white outline-none focus:border-blue-400" placeholder="0.00" />
+                                    </div>
+                                    {borrowAmountNum > fundBalance && (
+                                        <p className="text-xs text-amber-800 mt-1">ยอดขาด {fmtMoney(shortfallAmount)} บาท</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium text-gray-500 mb-1 block">วัตถุประสงค์</label>
+                                    <input type="text" value={borrowPurpose} onChange={e => setBorrowPurpose(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white outline-none focus:border-blue-400" placeholder="เหตุผล / โครงการ" />
+                                </div>
+                            </div>
+                            <div className="pt-4 flex gap-3">
+                                <button type="button" onClick={() => setShowBorrowMode(false)}
+                                    className="flex-1 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">ยกเลิก</button>
+                                <button type="button" onClick={handleBorrowSubmit}
+                                    className="flex-1 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold">ยืนยันยืม</button>
+                            </div>
+                            {isGeneratingPDF && <p className="text-center text-sm text-gray-500 mt-2">กำลังสร้างเอกสาร...</p>}
+                        </div>
+                    )}
+                    {showBorrowMode && borrowSubmitted && (
+                        <div className="text-center py-16">
+                            <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto">
+                                <span className="material-symbols-outlined text-5xl text-green-600">check</span>
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 mt-4">สร้างเอกสารการยืมสำเร็จ</h3>
+                            <p className="mt-2 text-gray-600">จำนวนเงิน: ฿{fmtMoney(borrowAmountNum)}</p>
+                            <p className="text-gray-600">วัตถุประสงค์: {borrowPurpose}</p>
+                            {borrowAmountNum > fundBalance && (
+                                <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 mt-3">
+                                    <p className="text-amber-900 text-sm">
+                                        <span className="font-semibold">⚠️ จำนวนเงินที่ขาดไป:</span> {fmtMoney(shortfallAmount)} บาท
+                                    </p>
+                                </div>
+                            )}
+                            <div className="mt-6 flex gap-2 justify-center">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowBorrowMode(false)}
+                                    className="px-6 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700"
+                                >ปิด</button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadBorrowPDF}
+                                    className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                                >ดาวน์โหลด PDF</button>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Shared fields */}
                     {/* Shared fields */}
                     <div className="space-y-4 mb-4">
                         {/* ประเภท/หมวดเงิน — ซ่อนเมื่อเป็นโหมดกลุ่ม (เพราะแต่ละรายการเลือกหมวดเอง) */}
