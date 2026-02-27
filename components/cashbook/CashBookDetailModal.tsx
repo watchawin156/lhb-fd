@@ -23,12 +23,38 @@ type LoanLike = {
     returnedAmount?: number;
 };
 
+type RepayRecord = {
+    date: string;
+    amount: number;
+};
+
 const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClose, txId }) => {
-    const { transactions, editTransaction, deleteTransaction, loans, repayLoan, addTransaction, schoolSettings } = useSchoolData();
+    const {
+        transactions,
+        editTransaction,
+        deleteTransaction,
+        loans,
+        repayLoan,
+        addTransaction,
+        schoolSettings,
+    } = useSchoolData();
+
     const [isEditingTx, setIsEditingTx] = useState(false);
     const [showDeletePrompt, setShowDeletePrompt] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState('');
-    const [editTxData, setEditTxData] = useState({ date: '', docNo: '', description: '', amount: '', fundType: '', payer: '', payee: '' });
+    const [editTxData, setEditTxData] = useState({
+        date: '',
+        docNo: '',
+        description: '',
+        amount: '',
+        fundType: '',
+        payer: '',
+        payee: '',
+    });
+
+    const [repayDate, setRepayDate] = useState(new Date().toISOString().slice(0, 10));
+    const [repayAmount, setRepayAmount] = useState('');
+    const [isRepaying, setIsRepaying] = useState(false);
 
     const selectedTx = useMemo(
         () => transactions.find((t: any) => String(t.id) === String(txId)),
@@ -55,14 +81,17 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         const donorTx = groupTxs.find((t: any) => t.expense > 0 && String(t.description || '').includes('ยืม'));
         const receiverTx = groupTxs.find((t: any) => t.income > 0 && String(t.description || '').includes('ยืม'));
 
-        const inferredId = selectedTx.loanId || parseLoanIdFromDocNo(docNo) || `AUTO-${selectedTx.date}-${selectedTx.docNo || selectedTx.id}-${Math.round(amount * 100)}`;
+        const inferredId = selectedTx.loanId || parseLoanIdFromDocNo(docNo) || `AUTO-${selectedTx.date}-${selectedTx.id}`;
 
-        let returnedAmount = 0;
-        if (selectedTx.loanId) {
-            returnedAmount = transactions
-                .filter((t: any) => t.loanId === selectedTx.loanId && String(t.description || '').includes('คืนเงินยืม') && (t.expense || 0) > 0)
-                .reduce((sum: number, t: any) => sum + (t.expense || 0), 0);
-        }
+        const returnedAmount = transactions
+            .filter((t: any) => {
+                if ((t.expense || 0) <= 0) return false;
+                if (!String(t.description || '').includes('คืนเงินยืม')) return false;
+                return String(t.loanId || '') === inferredId
+                    || String(t.description || '').includes(inferredId)
+                    || String(t.docNo || '').includes(inferredId);
+            })
+            .reduce((sum: number, t: any) => sum + (t.expense || 0), 0);
 
         return {
             id: inferredId,
@@ -95,15 +124,45 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         const fallback = loans
             .filter(l => Math.abs(l.amount - amount) < 0.0001)
             .filter(l => (
-                (selectedTx.income > 0 && l.toFund === selectedTx.fundType) ||
-                (selectedTx.expense > 0 && l.fromFund === selectedTx.fundType)
+                (selectedTx.income > 0 && l.toFund === selectedTx.fundType)
+                || (selectedTx.expense > 0 && l.fromFund === selectedTx.fundType)
             ))
             .sort((a, b) => String(b.dateBorrowed).localeCompare(String(a.dateBorrowed)));
 
         return fallback[0] || null;
     }, [selectedTx, loans, inferredLoan]);
 
-    const outstanding = linkedLoan ? Math.max(0, linkedLoan.amount - (linkedLoan.returnedAmount || 0)) : 0;
+    const repaymentRecords = useMemo<RepayRecord[]>(() => {
+        if (!linkedLoan) return [];
+
+        const keys = new Set<string>();
+        if (linkedLoan.id) keys.add(linkedLoan.id);
+        if (selectedTx?.loanId) keys.add(String(selectedTx.loanId));
+        const docLoanId = parseLoanIdFromDocNo(String(selectedTx?.docNo || ''));
+        if (docLoanId) keys.add(docLoanId);
+
+        const keyArr = Array.from(keys).filter(Boolean);
+
+        return transactions
+            .filter((t: any) => {
+                if ((t.expense || 0) <= 0) return false;
+                if (!String(t.description || '').includes('คืนเงินยืม')) return false;
+
+                if (t.loanId && keyArr.includes(String(t.loanId))) return true;
+                return keyArr.some(k => String(t.description || '').includes(k) || String(t.docNo || '').includes(k));
+            })
+            .sort((a: any, b: any) => {
+                const byDate = new Date(b.date).getTime() - new Date(a.date).getTime();
+                if (byDate !== 0) return byDate;
+                return Number(b.id || 0) - Number(a.id || 0);
+            })
+            .map((t: any) => ({ date: t.date, amount: Number(t.expense || 0) }));
+    }, [linkedLoan, selectedTx, transactions]);
+
+    const totalReturnedFromTx = repaymentRecords.reduce((sum, r) => sum + r.amount, 0);
+    const returnedMerged = linkedLoan ? Math.max(linkedLoan.returnedAmount || 0, totalReturnedFromTx) : 0;
+    const outstanding = linkedLoan ? Math.max(0, linkedLoan.amount - returnedMerged) : 0;
+    const latestRepayment = repaymentRecords[0] || null;
 
     useEffect(() => {
         if (isOpen && selectedTx && !isEditingTx && !showDeletePrompt) {
@@ -118,6 +177,13 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
             });
         }
     }, [isOpen, selectedTx, isEditingTx, showDeletePrompt]);
+
+    useEffect(() => {
+        if (isOpen) {
+            setRepayDate(new Date().toISOString().slice(0, 10));
+            setRepayAmount(outstanding > 0 ? String(outstanding) : '');
+        }
+    }, [isOpen, selectedTx?.id, linkedLoan?.id, outstanding]);
 
     if (!isOpen || !selectedTx) return null;
 
@@ -151,23 +217,28 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         onClose();
     };
 
-    const handleOpenLoanPDF = async (isReturn: boolean, overrideAmount?: number) => {
+    const handleOpenLoanPDF = async (isReturn: boolean, overrideAmount?: number, overrideDate?: string) => {
         if (!linkedLoan) {
             alert('ไม่พบสัญญายืมที่เกี่ยวข้อง');
             return;
         }
+
+        const amountForDoc = overrideAmount ?? (isReturn ? (latestRepayment?.amount || 0) : linkedLoan.amount);
+        if (isReturn && amountForDoc <= 0) {
+            alert('ยังไม่มีข้อมูลการคืนเงินสำหรับพิมพ์เอกสาร');
+            return;
+        }
+
+        const docDate = overrideDate
+            || (isReturn ? latestRepayment?.date : linkedLoan.dateBorrowed)
+            || new Date().toISOString().slice(0, 10);
+
         try {
-            const amountForDoc = overrideAmount ?? (
-                isReturn
-                    ? (outstanding > 0 ? outstanding : (linkedLoan.returnedAmount || linkedLoan.amount))
-                    : linkedLoan.amount
-            );
-            const today = new Date().toISOString().slice(0, 10);
             const pdfBytes = await buildLoanDocPDF(
                 { ...linkedLoan, amount: amountForDoc },
                 isReturn,
                 schoolSettings,
-                today
+                docDate
             );
             openBlob(pdfBytes);
         } catch (e) {
@@ -186,51 +257,62 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
             return;
         }
 
-        const resp = window.prompt(
-            `กรอกจำนวนเงินที่จะคืนสัญญา ${linkedLoan.id} (ยอดคงเหลือ ${fmtMoney(outstanding)}):`,
-            String(outstanding)
-        );
-        const amt = parseFloat(resp || '0');
-        if (amt <= 0) return;
-
-        const repayAmount = Math.min(amt, outstanding);
-        const realLoan = loans.find(l => l.id === linkedLoan.id);
-
-        if (realLoan) {
-            await repayLoan(linkedLoan.id, repayAmount);
-        } else {
-            if (!linkedLoan.fromFund || !linkedLoan.toFund) {
-                alert('ไม่พบหมวดต้นทาง/ปลายทางของการยืม จึงไม่สามารถคืนเงินอัตโนมัติได้');
-                return;
-            }
-            const today = new Date().toISOString().slice(0, 10);
-            const loanIdForTx = selectedTx.loanId || linkedLoan.id;
-            await addTransaction({
-                id: Date.now(),
-                date: today,
-                docNo: `คืน-${linkedLoan.id}`,
-                description: `คืนเงินยืม ${linkedLoan.id}`,
-                fundType: linkedLoan.toFund,
-                income: 0,
-                expense: repayAmount,
-                loanId: loanIdForTx,
-                skipLoanCheck: true,
-            });
-            await addTransaction({
-                id: Date.now() + 1,
-                date: today,
-                docNo: `คืน-${linkedLoan.id}`,
-                description: `คืนเงินยืม ${linkedLoan.id}`,
-                fundType: linkedLoan.fromFund,
-                income: repayAmount,
-                expense: 0,
-                loanId: loanIdForTx,
-                skipLoanCheck: true,
-            });
+        const repayAmountNum = parseFloat(repayAmount) || 0;
+        if (repayAmountNum <= 0) {
+            alert('กรุณากรอกจำนวนเงินคืนให้ถูกต้อง');
+            return;
+        }
+        if (repayAmountNum > outstanding) {
+            alert(`จำนวนเงินคืนเกินยอดคงเหลือ (${fmtMoney(outstanding)})`);
+            return;
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(repayDate)) {
+            alert('กรุณาระบุวันที่คืนเงิน');
+            return;
         }
 
-        await handleOpenLoanPDF(true, repayAmount);
-        onClose();
+        setIsRepaying(true);
+        try {
+            const realLoan = loans.find(l => l.id === linkedLoan.id);
+
+            if (realLoan) {
+                await repayLoan(linkedLoan.id, repayAmountNum, repayDate);
+            } else {
+                if (!linkedLoan.fromFund || !linkedLoan.toFund) {
+                    alert('ไม่พบหมวดต้นทาง/ปลายทางของการยืม จึงไม่สามารถคืนเงินอัตโนมัติได้');
+                    return;
+                }
+
+                const loanIdForTx = selectedTx.loanId || linkedLoan.id;
+                await addTransaction({
+                    id: Date.now(),
+                    date: repayDate,
+                    docNo: `คืน-${linkedLoan.id}`,
+                    description: `คืนเงินยืม ${linkedLoan.id}`,
+                    fundType: linkedLoan.toFund,
+                    income: 0,
+                    expense: repayAmountNum,
+                    loanId: loanIdForTx,
+                    skipLoanCheck: true,
+                });
+                await addTransaction({
+                    id: Date.now() + 1,
+                    date: repayDate,
+                    docNo: `คืน-${linkedLoan.id}`,
+                    description: `คืนเงินยืม ${linkedLoan.id}`,
+                    fundType: linkedLoan.fromFund,
+                    income: repayAmountNum,
+                    expense: 0,
+                    loanId: loanIdForTx,
+                    skipLoanCheck: true,
+                });
+            }
+
+            await handleOpenLoanPDF(true, repayAmountNum, repayDate);
+            setRepayAmount('');
+        } finally {
+            setIsRepaying(false);
+        }
     };
 
     return (
@@ -239,7 +321,9 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                 <div className="px-6 pt-5 pb-3 flex justify-between items-start">
                     <div>
                         <p className="text-xs text-gray-400">รายละเอียดรายการ</p>
-                        <h2 className="text-lg font-bold text-gray-900">{isEditingTx ? 'แก้ไขรายการ' : (selectedTx.income > 0 ? 'รายรับ' : 'รายจ่าย')}</h2>
+                        <h2 className="text-lg font-bold text-gray-900">
+                            {isEditingTx ? 'แก้ไขรายการ' : (selectedTx.income > 0 ? 'รายรับ' : 'รายจ่าย')}
+                        </h2>
                     </div>
                     <button onClick={handleClose} className="text-blue-500 hover:text-blue-700 text-sm font-semibold">ปิด</button>
                 </div>
@@ -384,30 +468,63 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                             </div>
                         )}
 
-                        <div className="flex flex-wrap gap-2">
-                            {linkedLoan && (
-                                <>
+                        {linkedLoan && (
+                            <div className="space-y-2 mb-3">
+                                <div className="flex flex-wrap gap-2">
                                     <button
                                         onClick={() => handleOpenLoanPDF(false)}
                                         className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center gap-1"
                                     >
                                         <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF ขอยืม
                                     </button>
-                                    <button
-                                        onClick={() => handleOpenLoanPDF(true)}
-                                        className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 flex items-center justify-center gap-1"
-                                    >
-                                        <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF คืนเงิน
-                                    </button>
+                                    {latestRepayment && (
+                                        <button
+                                            onClick={() => handleOpenLoanPDF(true)}
+                                            className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 flex items-center justify-center gap-1"
+                                        >
+                                            <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF คืนเงิน
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-3 space-y-2">
+                                    <p className="text-xs font-semibold text-green-900">ทำเรื่องคืนเงิน</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-[11px] text-green-800 block mb-1">วันที่คืน</label>
+                                            <input
+                                                type="date"
+                                                value={repayDate}
+                                                onChange={(e) => setRepayDate(e.target.value)}
+                                                className="w-full rounded-lg border border-green-300 px-2 py-1.5 text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] text-green-800 block mb-1">จำนวนเงินคืน</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={repayAmount}
+                                                onChange={(e) => setRepayAmount(e.target.value)}
+                                                className="w-full rounded-lg border border-green-300 px-2 py-1.5 text-sm text-right"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
                                     <button
                                         onClick={handleRepay}
-                                        disabled={outstanding <= 0}
-                                        className={`flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1 ${outstanding > 0 ? 'text-green-700 bg-green-50 hover:bg-green-100' : 'text-gray-400 bg-gray-100 cursor-not-allowed'}`}
+                                        disabled={isRepaying || outstanding <= 0}
+                                        className={`w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 ${outstanding > 0 && !isRepaying ? 'text-green-700 bg-green-100 hover:bg-green-200' : 'text-gray-400 bg-gray-100 cursor-not-allowed'}`}
                                     >
-                                        <span className="material-symbols-outlined text-base">paid</span> คืนเงิน
+                                        <span className="material-symbols-outlined text-base">paid</span>
+                                        {isRepaying ? 'กำลังบันทึกคืนเงิน...' : (outstanding > 0 ? 'บันทึกคืนเงิน' : 'คืนครบแล้ว')}
                                     </button>
-                                </>
-                            )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => setIsEditingTx(true)}
                                 className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 flex items-center justify-center gap-1"

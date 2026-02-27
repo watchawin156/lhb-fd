@@ -1,9 +1,6 @@
 import { PDFDocument, rgb } from 'pdf-lib';
-import { PDF_FONTS } from './pdfConfig';
 import fontkit from '@pdf-lib/fontkit';
 import { formatThaiDate } from '../utils';
-
-export const FS = PDF_FONTS.NORMAL;
 
 const FONT_CDN = {
     regular: 'https://cdn.jsdelivr.net/gh/watchawin156/font@main/THSarabunNew.ttf',
@@ -26,13 +23,25 @@ export function openBlob(bytes: Uint8Array) {
     const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const win = window.open(url, '_blank');
-    if (win) {
-        win.focus();
-        // Auto-print after a short delay
-        setTimeout(() => {
-            win.print();
-        }, 500);
+    if (win) win.focus();
+}
+
+function wrapText(text: string, maxWidth: number, font: any, size: number): string[] {
+    if (!text) return [''];
+    const lines: string[] = [];
+    let current = '';
+
+    for (const ch of text) {
+        const test = current + ch;
+        if (!current || font.widthOfTextAtSize(test, size) <= maxWidth) {
+            current = test;
+        } else {
+            lines.push(current);
+            current = ch;
+        }
     }
+    if (current) lines.push(current);
+    return lines;
 }
 
 export async function buildLoanDocPDF(
@@ -43,126 +52,149 @@ export async function buildLoanDocPDF(
 ) {
     const pdfDoc = await PDFDocument.create();
     const { font, fontBold } = await loadFonts(pdfDoc);
-    const W = 595.28, H = 841.89; // A4 portrait
-    const page = pdfDoc.addPage([W, H]);
-    const mL = 70, mR = 50; // Standard Thai gov margins
-    let y = H - 50;
 
-    const drawT = (text: string, x: number, yy: number, size = 16, bold = false, align: 'left' | 'center' | 'right' = 'left') => {
+    const W = 595.28;
+    const H = 841.89;
+    const mL = 56;
+    const mR = 56;
+    const contentWidth = W - mL - mR;
+
+    let page = pdfDoc.addPage([W, H]);
+    let y = H - 56;
+
+    const ensureSpace = (minY: number) => {
+        if (y < minY) {
+            page = pdfDoc.addPage([W, H]);
+            y = H - 56;
+        }
+    };
+
+    const drawText = (
+        text: string,
+        x: number,
+        yy: number,
+        size = 16,
+        bold = false,
+        align: 'left' | 'center' | 'right' = 'left'
+    ) => {
         const f = bold ? fontBold : font;
         let xPos = x;
-        if (align === 'center') {
-            const tw = f.widthOfTextAtSize(text, size);
-            xPos = x - tw / 2;
-        } else if (align === 'right') {
-            const tw = f.widthOfTextAtSize(text, size);
-            xPos = x - tw;
-        }
+        if (align === 'center') xPos = x - f.widthOfTextAtSize(text, size) / 2;
+        if (align === 'right') xPos = x - f.widthOfTextAtSize(text, size);
         page.drawText(text, { x: xPos, y: yy, size, font: f, color: rgb(0, 0, 0) });
     };
 
-    const indent = mL + 30;
-    const lineHeight = 20;
+    const drawParagraph = (
+        text: string,
+        x: number,
+        yy: number,
+        width: number,
+        size = 16,
+        bold = false,
+        lineGap = 4
+    ) => {
+        const f = bold ? fontBold : font;
+        const lh = size + lineGap;
+        const lines = wrapText(text, width, f, size);
+        let currentY = yy;
+        lines.forEach(line => {
+            ensureSpace(80);
+            drawText(line, x, currentY, size, bold, 'left');
+            currentY -= lh;
+            y = currentY;
+        });
+        return currentY;
+    };
 
-    // Header (บันทึกข้อความ)
-    drawT('บันทึกข้อความ', W / 2, y, 24, true, 'center');
-    y -= 40;
+    const moneyText = Number(loan.amount || 0).toLocaleString('th-TH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+    const project = String(loan.project || loan.toFund || '-');
+    const fromFund = String(loan.fromFund || '-');
+    const schoolName = String(schoolSettings.schoolNameTH || 'โรงเรียน');
 
-    // ส่วนราชการ
-    drawT('ส่วนราชการ', mL, y, 16, true);
-    drawT(schoolSettings.schoolNameTH, mL + 60, y, 16, false);
-    y -= lineHeight;
+    drawText('บันทึกข้อความ', W / 2, y, 26, true, 'center');
+    y -= 44;
 
-    // ที่ / วันที่
-    drawT('ที่', mL, y, 16, true);
-    drawT('......................................................', mL + 15, y, 16, false);
-    drawT('วันที่', W / 2 + 30, y, 16, true);
-    drawT(formatThaiDate(todayDate), W / 2 + 60, y, 16, false);
-    y -= lineHeight;
+    drawText('ส่วนราชการ', mL, y, 16, true);
+    y = drawParagraph(schoolName, mL + 62, y, contentWidth - 62, 16, false);
 
-    // เรื่อง
-    drawT('เรื่อง', mL, y, 16, true);
-    let subject = '';
-    if (isReturn) {
-        subject = `ขอส่งใช้เงินยืม กิจกรรม ${loan.project || loan.toFund || ''}`;
-    } else {
-        subject = `ขออนุมัติยืมเงินกิจกรรม ${loan.fromFund || ''} เพื่อดำเนินการกิจกรรม ${loan.project || loan.toFund || ''}`;
-    }
-    drawT(subject, mL + 30, y, 16, false);
-    y -= lineHeight * 1.5;
+    drawText('ที่', mL, y, 16, true);
+    drawText('....................................................', mL + 18, y, 16, false);
+    drawText('วันที่', W - 180, y, 16, true);
+    drawText(formatThaiDate(todayDate), W - 118, y, 16, false);
+    y -= 24;
 
-    // เรียน
-    drawT('เรียน', mL, y, 16, true);
-    drawT(`ผู้อำนวยการ${schoolSettings.schoolNameTH}`, mL + 30, y, 16, false);
-    y -= lineHeight * 2;
+    const subject = isReturn
+        ? `ขอส่งใช้เงินยืม กิจกรรม ${project}`
+        : `ขออนุมัติยืมเงินจาก ${fromFund} เพื่อดำเนินการกิจกรรม ${project}`;
+    drawText('เรื่อง', mL, y, 16, true);
+    y = drawParagraph(subject, mL + 36, y, contentWidth - 36, 16, false);
 
-    // เรื่องเดิม
-    drawT('เรื่องเดิม', indent, y, 16, true);
-    y -= lineHeight;
-    drawT(`ตามที่โรงเรียนได้ดำเนินกิจกรรมการจัดการเรียนการสอนและการบริหารทั่วไปประจำปีการศึกษานั้น`, mL, y, 16, false);
-    y -= lineHeight * 2;
+    drawText('เรียน', mL, y, 16, true);
+    y = drawParagraph(`ผู้อำนวยการ${schoolName}`, mL + 36, y, contentWidth - 36, 16, false);
+    y -= 6;
 
-    // ข้อเท็จจริง
-    drawT('ข้อเท็จจริง', indent, y, 16, true);
-    y -= lineHeight;
-    let factLine1 = '';
-    let factLine2 = '';
-    let factLine3 = '';
-    let amountStr = loan.amount.toLocaleString(undefined, { minimumFractionDigits: 2 });
+    drawText('เรื่องเดิม', mL + 28, y, 16, true);
+    y -= 24;
+    y = drawParagraph(
+        'ตามที่โรงเรียนได้ดำเนินกิจกรรมการจัดการเรียนการสอนและการบริหารทั่วไปประจำปีการศึกษานั้น',
+        mL,
+        y,
+        contentWidth,
+        16,
+        false
+    );
+    y -= 8;
 
-    if (isReturn) {
-        factLine1 = `บัดนี้ ได้รับจัดสรรเงินงบประมาณครบ จำนวนจึงเห็นควรส่งใช้เงินยืม ที่ได้ยืมมาดำเนินการ`;
-        factLine2 = `เพื่อให้ถูกต้องตามหลักการควบคุมทางการเงิน บัญชี หนังสือสั่งการและคู่มือฯ`;
-        factLine3 = `โดยมีรายละเอียดส่งคืนเงินยืมดังนี้`;
-    } else {
-        factLine1 = `เนื่องจากกิจกรรม ${loan.project || loan.toFund || ''} มีเงินไม่เพียงพอ`;
-        factLine2 = `จึงเห็นควรยืมเงินกิจกรรม ${loan.fromFund || ''} เพื่อดำเนินการให้แล้วเสร็จ`;
-        factLine3 = `โดยมีรายละเอียดดังนี้`;
-    }
-    drawT(factLine1, mL, y, 16, false); y -= lineHeight;
-    drawT(factLine2, mL, y, 16, false); y -= lineHeight;
-    drawT(factLine3, mL, y, 16, false); y -= lineHeight * 1.5;
+    drawText('ข้อเท็จจริง', mL + 28, y, 16, true);
+    y -= 24;
+    const fact1 = isReturn
+        ? 'บัดนี้มีการคืนเงินยืมตามขั้นตอนทางการเงินและบัญชี เพื่อให้ถูกต้องตามระเบียบของทางราชการ'
+        : `เนื่องจากกิจกรรม ${project} มีเงินไม่เพียงพอ จึงจำเป็นต้องยืมเงินจาก ${fromFund}`;
+    const fact2 = isReturn
+        ? 'โดยมีรายละเอียดการคืนเงินยืมดังนี้'
+        : 'โดยมีรายละเอียดเงินยืมดังนี้';
 
-    drawT(`๑. ${loan.project || loan.toFund || 'โครงการ/กิจกรรม'}`, indent + 20, y, 16, false);
-    drawT(`จำนวน`, indent + 180, y, 16, false);
-    drawT(`${amountStr}`, indent + 220, y, 16, false, 'right');
-    drawT(`บาท`, indent + 230, y, 16, false);
-    y -= lineHeight * 2;
+    y = drawParagraph(fact1, mL, y, contentWidth, 16, false);
+    y = drawParagraph(fact2, mL, y, contentWidth, 16, false);
+    y -= 4;
 
-    // ข้อเสนอแนะ
-    drawT('ข้อเสนอแนะเพื่อโปรดพิจารณา', indent, y, 16, true);
-    y -= lineHeight;
-    drawT('๑. เพื่อโปรดทราบและพิจารณาอนุมัติ', indent, y, 16, false);
-    y -= lineHeight;
-    drawT('๒. แจ้งงานบัญชีเพื่อทราบเพื่อลงบัญชีต่อไป', indent, y, 16, false);
-    y -= lineHeight;
-    drawT('จึงเรียนมาเพื่อโปรดทราบและพิจารณาอนุมัติ', indent, y, 16, false);
-    y -= lineHeight * 3;
+    y = drawParagraph(`๑. ${project}`, mL + 18, y, contentWidth - 200, 16, false);
+    drawText('จำนวน', W - 180, y + 20, 16, false);
+    drawText(moneyText, W - 120, y + 20, 16, true, 'right');
+    drawText('บาท', W - 92, y + 20, 16, false);
+    y -= 24;
 
-    // ลายเซ็นต์คนทำ
-    const sigX1 = W / 2 + 50;
-    drawT('ลงชื่อ......................................................เจ้าหน้าที่การเงิน', sigX1, y, 16, false, 'center');
-    y -= lineHeight;
-    drawT(`(${schoolSettings.financeOfficerName || '......................................................'})`, sigX1, y, 16, false, 'center');
-    y -= lineHeight;
-    drawT(`วันที่ ${formatThaiDate(todayDate)}`, sigX1, y, 16, false, 'center');
-    y -= lineHeight * 3;
+    drawText('ข้อเสนอแนะเพื่อโปรดพิจารณา', mL + 28, y, 16, true);
+    y -= 24;
+    y = drawParagraph('๑. เพื่อโปรดทราบและพิจารณาอนุมัติ', mL + 12, y, contentWidth - 12, 16, false);
+    y = drawParagraph('๒. แจ้งงานบัญชีเพื่อทราบและลงบัญชีต่อไป', mL + 12, y, contentWidth - 12, 16, false);
+    y = drawParagraph('จึงเรียนมาเพื่อโปรดทราบและพิจารณาอนุมัติ', mL + 12, y, contentWidth - 12, 16, false);
 
-    // คำสั่ง ผอ.
-    drawT('- ทราบ อนุมัติ', mL + 20, y, 16, false);
-    y -= lineHeight;
-    drawT('- ดำเนินการตามเสนอ', mL + 20, y, 16, false);
-    y -= lineHeight * 3;
+    ensureSpace(280);
+    y -= 26;
+    const signX = W - 170;
+    drawText('ลงชื่อ......................................................เจ้าหน้าที่การเงิน', signX, y, 16, false, 'center');
+    y -= 20;
+    drawText(`(${schoolSettings.financeOfficerName || '-'})`, signX, y, 16, false, 'center');
+    y -= 20;
+    drawText(`วันที่ ${formatThaiDate(todayDate)}`, signX, y, 16, false, 'center');
 
-    const sigX2 = W / 2 + 50;
-    drawT('ลงชื่อ......................................................', sigX2, y, 16, false, 'center');
-    y -= lineHeight;
-    drawT(`(${schoolSettings.directorName || '......................................................'})`, sigX2, y, 16, false, 'center');
-    y -= lineHeight;
-    drawT(`ผู้อำนวยการ${schoolSettings.schoolNameTH}`, sigX2, y, 16, false, 'center');
-    y -= lineHeight;
-    drawT(`วันที่ ${formatThaiDate(todayDate)}`, sigX2, y, 16, false, 'center');
+    y -= 56;
+    drawText('- ทราบ อนุมัติ', mL + 18, y, 16, false);
+    y -= 22;
+    drawText('- ดำเนินการตามเสนอ', mL + 18, y, 16, false);
 
-    const pdfBytes = await pdfDoc.save();
-    return pdfBytes;
+    y -= 44;
+    drawText('ลงชื่อ......................................................', signX, y, 16, false, 'center');
+    y -= 20;
+    drawText(`(${schoolSettings.directorName || '-'})`, signX, y, 16, false, 'center');
+    y -= 20;
+    drawText(`ผู้อำนวยการ${schoolName}`, signX, y, 16, false, 'center');
+    y -= 20;
+    drawText(`วันที่ ${formatThaiDate(todayDate)}`, signX, y, 16, false, 'center');
+
+    return pdfDoc.save();
 }

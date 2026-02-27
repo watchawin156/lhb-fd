@@ -66,7 +66,7 @@ interface SchoolContextType {
   addTransaction: (tx: Transaction) => Promise<void>;
   editTransaction: (id: number, updatedTx: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: number, reason: string) => Promise<void>;
-  repayLoan: (loanId: string, amount: number) => Promise<void>;
+  repayLoan: (loanId: string, amount: number, repayDate?: string) => Promise<void>;
   updateSchoolSettings: (settings: Partial<SchoolSettingsData>) => Promise<void>;
   resetData: () => Promise<void>;
   logAction: (action: string, details: string, module: string) => void;
@@ -299,9 +299,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAction('เพิ่มข้อมูล', `หน้า${getFundTitle(payload.fundType)} เพิ่มรายการที่เอกสาร ${payload.docNo || '-'} ยอดเงิน ${payload.income > 0 ? payload.income : payload.expense}`, payload.fundType);
   };
 
-  const repayLoan = async (loanId: string, amount: number) => {
+  const repayLoan = async (loanId: string, amount: number, repayDate?: string) => {
     const loan = loans.find(l => l.id === loanId);
     if (!loan) return;
+    const txDate = repayDate || new Date().toISOString().slice(0, 10);
     const newReturned = (loan.returnedAmount || 0) + amount;
     setLoans(prev => prev.map(l => l.id === loanId ? { ...l, returnedAmount: newReturned, status: newReturned >= l.amount ? 'returned' : l.status } : l));
     logAction('คืนเงินยืม', `คืนเงินสัญญา ${loanId} จำนวน ${amount}`, 'loan');
@@ -312,7 +313,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // expense from the fund that received money
         await doAddTransaction({
           id: Date.now(),
-          date: new Date().toISOString().slice(0, 10),
+          date: txDate,
           docNo: `คืน-${loanId}`,
           description: `คืนเงินยืม ${loanId}`,
           fundType: loan.toFund,
@@ -324,7 +325,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // income to the fund that lent money
         await doAddTransaction({
           id: Date.now() + 1,
-          date: new Date().toISOString().slice(0, 10),
+          date: txDate,
           docNo: `คืน-${loanId}`,
           description: `คืนเงินยืม ${loanId}`,
           fundType: loan.fromFund,
