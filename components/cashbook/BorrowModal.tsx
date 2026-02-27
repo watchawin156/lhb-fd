@@ -93,7 +93,7 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
 
             // Generate PDF as blob
             const pdfBytes = await buildLoanDocPDF(newLoan, false, schoolSettings, today);
-            const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+            const blob = new Blob([pdfBytes as unknown as Uint8Array], { type: 'application/pdf' });
             const url = URL.createObjectURL(blob);
             setPdfBlobUrl(url);
 

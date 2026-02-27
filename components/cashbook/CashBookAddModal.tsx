@@ -26,6 +26,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
     const [borrowSubmitted, setBorrowSubmitted] = useState(false);
+    const [selectedBankId, setSelectedBankId] = useState('');
 
     // Shared header fields
     const [addDate, setAddDate] = useState(new Date().toISOString().slice(0, 10));
@@ -223,7 +224,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
             // Generate PDF as blob
             const pdfBytes = await buildLoanDocPDF(newLoan, false, schoolSettings, today);
-            const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+            const blob = new Blob([pdfBytes as unknown as Uint8Array], { type: 'application/pdf' });
             const url = URL.createObjectURL(blob);
             setPdfBlobUrl(url);
             setBorrowSubmitted(true);
@@ -342,9 +343,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                         .filter((t: any) => t.fundType === 'fund-tax' && t.date <= addDate)
                         .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                     if (amt > fundBalance) {
-                        if (!window.confirm(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือภาษี (${fmtMoney(fundBalance)} บาท)\nระบบจะยืมเงินจากหมวดอื่นอัตโนมัติเพื่อดำเนินการต่อ ต้องการบันทึกหรือไม่?`)) {
-                            return;
-                        }
+                        
                     }
                     addTransaction({
                         id: Date.now(),
@@ -371,9 +370,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                         .filter((t: any) => t.fundType === 'fund-tax' && t.date <= addDate)
                         .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                     if (selectedTx.income > fundBalance) {
-                        if (!window.confirm(`ยอด ${fmtMoney(selectedTx.income)} บาท เกินยอดคงเหลือภาษี (${fmtMoney(fundBalance)} บาท)\nระบบจะยืมเงินจากหมวดอื่นอัตโนมัติเพื่อดำเนินการต่อ ต้องการบันทึกหรือไม่?`)) {
-                            return;
-                        }
+                        
                     }
                     addTransaction({
                         id: Date.now(),
@@ -431,9 +428,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 .filter((t: any) => t.fundType === 'fund-poor' && t.date <= addDate)
                 .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
             if (amt > fundBalance) {
-                if (!window.confirm(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือปัจจัยยากจน (${fmtMoney(fundBalance)} บาท)\nระบบจะยืมเงินจากหมวดอื่นอัตโนมัติเพื่อดำเนินการต่อ ต้องการบันทึกหรือไม่?`)) {
-                    return;
-                }
+                
             }
             const baseDesc = selectedTx.description || 'เงินปัจจัยพื้นฐานนักเรียนยากจน';
             const cleanDesc = extractFundName(baseDesc);
@@ -489,9 +484,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 .filter((t: any) => t.fundType === 'fund-eef' && t.date <= addDate)
                 .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
             if (amt > fundBalance) {
-                if (!window.confirm(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือ กสศ. (${fmtMoney(fundBalance)} บาท)\nระบบจะยืมเงินจากหมวดอื่นอัตโนมัติเพื่อดำเนินการต่อ ต้องการบันทึกหรือไม่?`)) {
-                    return;
-                }
+                
             }
             const baseDesc = selectedTx.description || 'เงิน กสศ.';
             const cleanDesc = extractFundName(baseDesc);
@@ -537,9 +530,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     .filter((t: any) => t.fundType === 'fund-state' && t.date <= addDate)
                     .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                 if (amt > fundBalance) {
-                    if (!window.confirm(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือเงินรายได้แผ่นดิน (${fmtMoney(fundBalance)} บาท)\nระบบจะยืมเงินจากหมวดอื่นอัตโนมัติเพื่อดำเนินการต่อ ต้องการบันทึกหรือไม่?`)) {
-                        return;
-                    }
+                    
                 }
                 addTransaction({
                     id: Date.now(),
@@ -571,9 +562,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     .filter((t: any) => t.fundType === 'fund-state' && t.date <= addDate)
                     .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                 if (amt > fundBalance) {
-                    if (!window.confirm(`ยอด ${fmtMoney(amt)} บาท เกินยอดคงเหลือเงินรายได้แผ่นดิน (${fmtMoney(fundBalance)} บาท)\nระบบจะยืมเงินจากหมวดอื่นอัตโนมัติเพื่อดำเนินการต่อ ต้องการบันทึกหรือไม่?`)) {
-                        return;
-                    }
+                    
                 }
                 addTransaction({
                     id: Date.now(),
@@ -633,9 +622,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 .filter((t: any) => t.fundType === addFundType && t.date <= addDate)
                 .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
             if (subTotal > fundBalance) {
-                    if (!window.confirm(`ยอดรวม ${fmtMoney(subTotal)} บาท เกินยอดคงเหลือประเภท (${fmtMoney(fundBalance)} บาท)\nระบบจะยืมเงินจากหมวดอื่นอัตโนมัติเพื่อดำเนินการต่อ ต้องการบันทึกหรือไม่?`)) {
-                        return;
-                    }
+                    
             }
         for (let idx = 0; idx < dataItems.length; idx++) {
             const s = dataItems[idx];
@@ -646,11 +633,11 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 docNo: addDocNo,
                 description: s.description,
                 fundType: addFundType,
-                income: addTransactionType === 'income' ? amt : 0,
-                expense: addTransactionType === 'expense' ? amt : 0,
-                payer: addTransactionType === 'income' ? headerTitle : '',
-                payee: addTransactionType === 'expense' ? headerTitle : '',
-                recipientType: addTransactionType === 'expense' ? (addPayeeType === 'legal' ? 'juristic' : 'individual') : undefined,
+                income: 0,
+                expense: amt,
+                payer: '',
+                payee: headerTitle,
+                recipientType: addPayeeType === 'legal' ? 'juristic' : 'individual',
                 bankId: isInterestMode ? addBankId : undefined,
             });
         }

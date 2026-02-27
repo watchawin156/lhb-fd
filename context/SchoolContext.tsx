@@ -228,6 +228,44 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       .reduce((acc, t) => acc + (t.income || 0) - (t.expense || 0), 0);
   };
 
+  const pickBorrowDonorFund = (
+    targetFund: string,
+    shortfall: number,
+    fundBalances: Record<string, number>
+  ): { donor?: string; cancelled?: boolean } => {
+    const candidates = Object.entries(fundBalances)
+      .filter(([ft, bal]) => ft !== targetFund && bal > 0)
+      .sort((a, b) => b[1] - a[1]);
+
+    if (candidates.length === 0) return {};
+
+    const enoughCandidates = candidates.filter(([, bal]) => bal >= shortfall);
+    const displayCandidates = enoughCandidates.length > 0 ? enoughCandidates : candidates;
+
+    const listText = displayCandidates
+      .map(([ft, bal], idx) => (
+        `${idx + 1}. ${getFundTitle(ft)} (คงเหลือ ${bal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท)`
+      ))
+      .join('\n');
+
+    const answer = window.prompt(
+      `ยอดรายจ่ายของ ${getFundTitle(targetFund)} ไม่พอ\nขาดอีก ${shortfall.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท\n\nเลือกหมวดที่จะยืมจากรายการด้านล่าง (ใส่เลขลำดับ)\n${listText}`,
+      '1'
+    );
+
+    if (answer === null) return { cancelled: true };
+
+    const index = Number.parseInt(answer, 10);
+    if (!Number.isNaN(index) && index >= 1 && index <= displayCandidates.length) {
+      return { donor: displayCandidates[index - 1][0] };
+    }
+
+    const byCode = displayCandidates.find(([ft]) => ft === answer.trim());
+    if (byCode) return { donor: byCode[0] };
+
+    return { donor: displayCandidates[0][0] };
+  };
+
   // helper to add to D1 & state without triggering the loan checks again
   const doAddTransaction = async (tx: Transaction) => {
     const payload = { ...tx };
@@ -328,25 +366,12 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (!fundBalances[t.fundType]) fundBalances[t.fundType] = 0;
             fundBalances[t.fundType] += (t.income || 0) - (t.expense || 0);
           });
-          let donor: string | undefined;
-          let maxBal = 0;
-          Object.entries(fundBalances).forEach(([ft, bal]) => {
-            if (ft === tx.fundType) return;
-            if (bal >= shortfall && bal > maxBal) {
-              donor = ft;
-              maxBal = bal;
-            }
-          });
-          // if no single fund has enough, pick the one with the highest balance
-          if (!donor) {
-            Object.entries(fundBalances).forEach(([ft, bal]) => {
-              if (ft === tx.fundType) return;
-              if (bal > maxBal) {
-                donor = ft;
-                maxBal = bal;
-              }
-            });
+          const picked = pickBorrowDonorFund(tx.fundType, shortfall, fundBalances);
+          if (picked.cancelled) {
+            alert('ยกเลิกการบันทึกรายจ่าย เพราะยังไม่ได้เลือกหมวดที่จะยืม');
+            return;
           }
+          const donor = picked.donor;
 
           if (donor) {
             const now = new Date().toISOString().slice(0, 10);
@@ -421,24 +446,12 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (!fundBalances[t.fundType]) fundBalances[t.fundType] = 0;
           fundBalances[t.fundType] += (t.income || 0) - (t.expense || 0);
         });
-        let donor: string | undefined;
-        let maxBal = 0;
-        Object.entries(fundBalances).forEach(([ft, bal2]) => {
-          if (ft === merged.fundType) return;
-          if (bal2 >= shortfall && bal2 > maxBal) {
-            donor = ft;
-            maxBal = bal2;
-          }
-        });
-        if (!donor) {
-          Object.entries(fundBalances).forEach(([ft, bal2]) => {
-            if (ft === merged.fundType) return;
-            if (bal2 > maxBal) {
-              donor = ft;
-              maxBal = bal2;
-            }
-          });
+        const picked = pickBorrowDonorFund(merged.fundType, shortfall, fundBalances);
+        if (picked.cancelled) {
+          alert('ยกเลิกการแก้ไขรายการ เพราะยังไม่ได้เลือกหมวดที่จะยืม');
+          return;
         }
+        const donor = picked.donor;
         if (donor) {
           const now = new Date().toISOString().slice(0, 10);
           const loan: LoanContract = {
