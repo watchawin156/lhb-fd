@@ -659,11 +659,12 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch'))?.id || finalBankId;
                 }
             } else if (addTransactionType === 'income') {
-                if (descMatch.includes('ดอกเบี้ยอาหารกลางวัน')) {
-                    finalFundType = 'fund-lunch';
+            } else if (addTransactionType === 'income') {
+                if (descMatch.includes('ดอกเบี้ยอาหารกลางวัน') || descMatch.includes('ดอกเบี้ยเงินอาหารกลางวัน')) {
+                    finalFundType = 'fund-state';
                     finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch'))?.id || finalBankId;
                 } else if (descMatch.includes('ดอกเบี้ยเงินอุดหนุน')) {
-                    finalFundType = 'fund-subsidy';
+                    finalFundType = 'fund-state';
                     finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อุดหนุน') || b.fundTypes.includes('fund-subsidy'))?.id || finalBankId;
                 } else if (descMatch.includes('ดอกเบี้ย กสศ') || descMatch.includes('รับเงินดอกเบี้ยบัญชี กสศ')) {
                     finalFundType = 'fund-eef';
@@ -674,8 +675,15 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 }
             }
 
-            if (finalFundType === 'fund-state' && !finalBankId) {
-                alert(`กรุณาเลือกบัญชีธนาคารสำหรับรายการ '${s.description}' (เนื่องจากเป็นรายการเงินรายได้แผ่นดิน)`);
+            if (finalFundType === 'fund-state') {
+                if (!descMatch.includes('ดอกเบี้ยเงินอุดหนุน') && !descMatch.includes('ดอกเบี้ยอาหารกลางวัน') && !descMatch.includes('ดอกเบี้ยเงินอาหารกลางวัน')) {
+                    alert(`หมวดเงินรายได้แผ่นดิน อนุญาตให้บันทึกเฉพาะ "ดอกเบี้ยเงินอุดหนุน" และ "ดอกเบี้ยอาหารกลางวัน" เท่านั้น\nพบรายการที่ไม่สอดคล้อง: ${s.description}`);
+                    return;
+                }
+            }
+
+            if (finalFundType === 'fund-state' && !finalBankId && addTransactionType !== 'expense') {
+                alert(`กรุณาเลือกหรือตรวจสอบบัญชีธนาคารสำหรับรายการ '${s.description}' (หมวดเงินรายได้แผ่นดิน)`);
                 return;
             }
 
@@ -963,8 +971,8 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                 </label>
                                 <div className="flex flex-wrap gap-2">
                                     {[
-                                        { label: 'บช.เงินอาหารกลางวัน', val: 'ดอกเบี้ยอาหารกลางวัน', fund: 'fund-lunch' },
-                                        { label: 'บช.เงินอุดหนุนอื่น', val: 'ดอกเบี้ยเงินอุดหนุน', fund: 'fund-subsidy' },
+                                        { label: 'บช.เงินอาหารกลางวัน', val: 'ดอกเบี้ยอาหารกลางวัน', fund: 'fund-state' },
+                                        { label: 'บช.เงินอุดหนุนอื่น', val: 'ดอกเบี้ยเงินอุดหนุน', fund: 'fund-state' },
                                         { label: 'บช.เงิน กสศ.', val: 'ดอกเบี้ย กสศ.', fund: 'fund-eef' },
                                         { label: 'บช.เงินรายได้สถานศึกษา', val: 'ดอกเบี้ยรายได้สถานศึกษา', fund: 'fund-school-income' }
                                     ].map(btn => (
@@ -972,8 +980,15 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                             onClick={() => {
                                                 setAddFundType(btn.fund);
                                                 updateSub(subItems[0].id, 'description', `รับเงิน${btn.val}`);
-                                                // Bank ID will be auto-assigned in handleAddSubmit logic based on description
-                                                const bankIdMatch = schoolSettings.bankAccounts?.find((b: any) => b.fundTypes.includes(btn.fund))?.id;
+
+                                                let bankIdMatch = '';
+                                                if (btn.val.includes('อาหารกลางวัน') || btn.val.includes('ดอกเบี้ยอาหารกลางวัน')) {
+                                                    bankIdMatch = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch'))?.id || '';
+                                                } else if (btn.val.includes('อุดหนุน') || btn.val.includes('ดอกเบี้ยเงินอุดหนุน')) {
+                                                    bankIdMatch = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อุดหนุน') || b.fundTypes.includes('fund-subsidy'))?.id || '';
+                                                } else {
+                                                    bankIdMatch = schoolSettings.bankAccounts?.find((b: any) => b.fundTypes.includes(btn.fund))?.id || '';
+                                                }
                                                 if (bankIdMatch) setAddBankId(bankIdMatch);
                                             }}
                                             className="px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 text-[11px] font-semibold hover:bg-green-100 hover:border-green-300 transition-all flex items-center gap-1">
