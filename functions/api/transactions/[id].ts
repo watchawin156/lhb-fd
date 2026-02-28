@@ -23,7 +23,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ params, request, env })
         income = ?, expense = ?, payer = ?, payee = ?,
         payee_type = ?, bank_id = ?, income_ref_id = ?,
         extra_json = ?, updated_at = datetime('now')
-       WHERE id = ?`
+       WHERE id = ? OR id = ?`
         ).bind(
             body.date,
             body.docNo || null,
@@ -37,10 +37,11 @@ export const onRequestPut: PagesFunction<Env> = async ({ params, request, env })
             body.bankId || null,
             body.incomeRefId || null,
             Object.keys(extra).length > 0 ? JSON.stringify(extra) : null,
-            id
+            idParam,
+            isNaN(Number(idParam)) ? idParam : Number(idParam)
         ).run();
 
-        return Response.json({ success: true, id });
+        return Response.json({ success: true, id: idParam });
     } catch (e: any) {
         return Response.json({ error: e.message }, { status: 500 });
     }
@@ -49,8 +50,10 @@ export const onRequestPut: PagesFunction<Env> = async ({ params, request, env })
 export const onRequestDelete: PagesFunction<Env> = async ({ params, env }) => {
     try {
         const idParam = params.id as string;
-        const id = isNaN(Number(idParam)) ? idParam : Number(idParam);
-        await env.DB.prepare('DELETE FROM transactions WHERE id = ?').bind(id).run();
+        const idNum = Number(idParam);
+        await env.DB.prepare('DELETE FROM transactions WHERE id = ? OR id = ?')
+            .bind(idParam, isNaN(idNum) ? idParam : idNum)
+            .run();
         return Response.json({ success: true });
     } catch (e: any) {
         return Response.json({ error: e.message }, { status: 500 });
