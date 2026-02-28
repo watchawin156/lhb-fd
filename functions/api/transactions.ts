@@ -7,7 +7,9 @@ interface Env {
 }
 
 function txFromRow(row: any) {
+    const extra = row.extra_json ? JSON.parse(row.extra_json) : {};
     return {
+        ...extra,
         id: row.id,
         date: row.date,
         docNo: row.doc_no,
@@ -20,7 +22,6 @@ function txFromRow(row: any) {
         payeeType: row.payee_type,
         bankId: row.bank_id,
         incomeRefId: row.income_ref_id,
-        ...(row.extra_json ? JSON.parse(row.extra_json) : {}),
     };
 }
 
@@ -40,7 +41,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         const body: any = await request.json();
         const extra: any = {};
         // เก็บ fields พิเศษใน extra_json
-        const knownKeys = ['date', 'docNo', 'description', 'fundType', 'income', 'expense', 'payer', 'payee', 'payeeType', 'bankId', 'incomeRefId'];
+        const knownKeys = ['id', 'date', 'docNo', 'description', 'fundType', 'income', 'expense', 'payer', 'payee', 'payeeType', 'bankId', 'incomeRefId'];
         for (const k of Object.keys(body)) {
             if (!knownKeys.includes(k)) extra[k] = body[k];
         }
