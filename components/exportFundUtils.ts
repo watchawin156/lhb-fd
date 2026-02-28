@@ -211,10 +211,10 @@ export const handleExportPDF = async (
         return;
     }
 
-    if (pageId === 'fund-state') {
+    if (pageId === 'fund-state' || pageId === 'fund-state-subsidy-interest' || pageId === 'fund-state-lunch-interest') {
         const isLandscape = false;
 
-        const targetFunds = ['fund-state'];
+        const targetFunds = ['fund-state', 'fund-state-subsidy-interest', 'fund-state-lunch-interest'];
         const combinedTxs = transactions
             .filter(t => targetFunds.includes(t.fundType) && t.date >= exportStartDate && t.date <= exportEndDate)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -348,15 +348,15 @@ export const handleExportPDF = async (
                 if (isLandscape) {
                     row = [
                         fmtDate(t.date), t.docNo || '', t.description || '',
-                        t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
-                        t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
-                        fmtAmt(runBal)
+                        t.fundType === 'fund-state-subsidy-interest' || t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
+                        t.fundType === 'fund-state-lunch-interest' ? fmtAmt(t.income || 0) : '',
+                        '', '', fmtAmt(runBal)
                     ];
                 } else {
                     row = [
                         fmtDate(t.date), t.docNo || '', t.description || '',
-                        t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
-                        t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
+                        t.fundType === 'fund-state-subsidy-interest' || t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
+                        t.fundType === 'fund-state-lunch-interest' ? fmtAmt(t.income || 0) : '',
                         fmtAmt(t.income || 0), fmtAmt(t.expense || 0), fmtAmt(runBal)
                     ];
                 }

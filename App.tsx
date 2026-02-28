@@ -47,6 +47,8 @@ const App: React.FC = () => {
       case 'fund-15y-uniform': return 'เงินเรียนฟรี 15 ปี - เครื่องแบบนักเรียน';
       case 'fund-15y-activity': return 'เงินเรียนฟรี 15 ปี - กิจกรรมพัฒนาคุณภาพผู้เรียน';
       case 'fund-poor': return 'เงินปัจจัยพื้นฐานนักเรียนยากจน';
+      case 'fund-state-subsidy-interest': return 'เงินรายได้แผ่นดิน(ดอกเบี้ยเงินอุดหนุน)';
+      case 'fund-state-lunch-interest': return 'เงินรายได้แผ่นดิน(ดอกเบี้ยอาหารกลางวัน)';
       case 'fund-state': return 'เงินรายได้แผ่นดิน';
       case 'fund-lunch': return 'เงินอาหารกลางวัน';
       case 'fund-eef': return 'เงิน กสศ.';

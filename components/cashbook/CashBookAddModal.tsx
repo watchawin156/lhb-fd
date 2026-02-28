@@ -120,10 +120,10 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     // Get income transactions of fund-state type for selection (เงินรายได้แผ่นดิน - ดอกเบี้ย)
     const stateIncomeTransactions = useMemo(() => {
         return transactions
-            .filter((t: any) => t.fundType === 'fund-state' && (t.income || 0) > 0)
+            .filter((t: any) => t.fundType?.startsWith('fund-state') && (t.income || 0) > 0)
             .map((t: any) => {
                 const spent = transactions
-                    .filter((exp: any) => exp.fundType === 'fund-state' && (exp.incomeRefId === t.id || (!exp.incomeRefId && exp.description === `ส่งดอกเบี้ย (${t.description || 'เงินรายได้แผ่นดิน'})`)))
+                    .filter((exp: any) => exp.fundType?.startsWith('fund-state') && (exp.incomeRefId === t.id || (!exp.incomeRefId && exp.description === `ส่งดอกเบี้ย (${t.description || 'เงินรายได้แผ่นดิน'})`)))
                     .reduce((sum: number, exp: any) => sum + (exp.expense || 0), 0);
                 return { ...t, remaining: (t.income || 0) - spent };
             })
@@ -324,7 +324,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
         const isTaxMode = addFundType === 'fund-tax';
         const isPoorExpense = addFundType === 'fund-poor' && addTransactionType === 'expense';
-        const isStateExpense = addFundType === 'fund-state' && addTransactionType === 'expense';
+        const isStateExpense = addFundType?.startsWith('fund-state') && addTransactionType === 'expense';
         const isEefExpense = addFundType === 'fund-eef' && addTransactionType === 'expense';
 
         // === โหมดภาษี 1% ===
@@ -546,7 +546,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     return;
                 }
                 const fundBalance = transactions
-                    .filter((t: any) => t.fundType === 'fund-state' && t.date <= addDate)
+                    .filter((t: any) => t.fundType?.startsWith('fund-state') && t.date <= addDate)
                     .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                 if (amt > fundBalance) {
 
@@ -556,7 +556,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     date: addDate,
                     docNo: addDocNo,
                     description: `ส่งดอกเบี้ย ${stateManualDesc}`,
-                    fundType: 'fund-state',
+                    fundType: addFundType || 'fund-state-subsidy-interest',
                     income: 0,
                     expense: amt,
                     payer: '',
@@ -579,7 +579,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     return;
                 }
                 const fundBalance = transactions
-                    .filter((t: any) => t.fundType === 'fund-state' && t.date <= addDate)
+                    .filter((t: any) => t.fundType?.startsWith('fund-state') && t.date <= addDate)
                     .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                 if (amt > fundBalance) {
 
@@ -589,7 +589,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     date: addDate,
                     docNo: addDocNo,
                     description: `ส่งดอกเบี้ย ${extractFundName(selectedTx.description || 'เงินรายได้แผ่นดิน')}`,
-                    fundType: 'fund-state',
+                    fundType: selectedTx.fundType || 'fund-state-subsidy-interest',
                     income: 0,
                     expense: amt,
                     payer: '',
@@ -652,19 +652,18 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
             if (addTransactionType === 'expense') {
                 if (descMatch.includes('เบิกดอกเบี้ยบัญชีเงินอุดหนุนส่งเขต')) {
-                    finalFundType = 'fund-state';
+                    finalFundType = 'fund-state-subsidy-interest';
                     finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อุดหนุน') || b.fundTypes.includes('fund-subsidy'))?.id || finalBankId;
                 } else if (descMatch.includes('เบิกดอกเบี้ยบัญชีเงินอาหารกลางวันส่งเขต')) {
-                    finalFundType = 'fund-state';
+                    finalFundType = 'fund-state-lunch-interest';
                     finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch'))?.id || finalBankId;
                 }
             } else if (addTransactionType === 'income') {
-            } else if (addTransactionType === 'income') {
                 if (descMatch.includes('ดอกเบี้ยอาหารกลางวัน') || descMatch.includes('ดอกเบี้ยเงินอาหารกลางวัน')) {
-                    finalFundType = 'fund-state';
+                    finalFundType = 'fund-state-lunch-interest';
                     finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch'))?.id || finalBankId;
                 } else if (descMatch.includes('ดอกเบี้ยเงินอุดหนุน')) {
-                    finalFundType = 'fund-state';
+                    finalFundType = 'fund-state-subsidy-interest';
                     finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อุดหนุน') || b.fundTypes.includes('fund-subsidy'))?.id || finalBankId;
                 } else if (descMatch.includes('ดอกเบี้ย กสศ') || descMatch.includes('รับเงินดอกเบี้ยบัญชี กสศ')) {
                     finalFundType = 'fund-eef';
@@ -675,14 +674,14 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 }
             }
 
-            if (finalFundType === 'fund-state') {
-                if (!descMatch.includes('ดอกเบี้ยเงินอุดหนุน') && !descMatch.includes('ดอกเบี้ยอาหารกลางวัน') && !descMatch.includes('ดอกเบี้ยเงินอาหารกลางวัน')) {
+            if (finalFundType?.startsWith('fund-state')) {
+                if (!descMatch.includes('ดอกเบี้ยเงินอุดหนุน') && !descMatch.includes('ดอกเบี้ยอาหารกลางวัน') && !descMatch.includes('ดอกเบี้ยเงินอาหารกลางวัน') && !descMatch.includes('เบิกดอกเบี้ย')) {
                     alert(`หมวดเงินรายได้แผ่นดิน อนุญาตให้บันทึกเฉพาะ "ดอกเบี้ยเงินอุดหนุน" และ "ดอกเบี้ยอาหารกลางวัน" เท่านั้น\nพบรายการที่ไม่สอดคล้อง: ${s.description}`);
                     return;
                 }
             }
 
-            if (finalFundType === 'fund-state' && !finalBankId && addTransactionType !== 'expense') {
+            if (finalFundType?.startsWith('fund-state') && !finalBankId && addTransactionType !== 'expense') {
                 alert(`กรุณาเลือกหรือตรวจสอบบัญชีธนาคารสำหรับรายการ '${s.description}' (หมวดเงินรายได้แผ่นดิน)`);
                 return;
             }
@@ -948,7 +947,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                     placeholder="กค 68/001" />
                             </div>
                         </div>
-                        {((addTransactionType === 'income' && addFundType === 'fund-state') || (addTransactionType === 'expense' && addFundType === 'fund-state' && isStateManualMode)) && (
+                        {((addTransactionType === 'income' && addFundType?.startsWith('fund-state')) || (addTransactionType === 'expense' && addFundType?.startsWith('fund-state') && isStateManualMode)) && (
                             <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 animate-fade-in mt-4">
                                 <label className="text-sm font-semibold text-blue-800 mb-1 block">เงินรายได้แผ่นดิน(ดอกเบี้ย) — เลือกบัญชีธนาคารเป้าหมาย</label>
                                 <select value={addBankId} onChange={e => setAddBankId(e.target.value)}
@@ -971,8 +970,8 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                 </label>
                                 <div className="flex flex-wrap gap-2">
                                     {[
-                                        { label: 'บช.เงินอาหารกลางวัน', val: 'ดอกเบี้ยอาหารกลางวัน', fund: 'fund-state' },
-                                        { label: 'บช.เงินอุดหนุนอื่น', val: 'ดอกเบี้ยเงินอุดหนุน', fund: 'fund-state' },
+                                        { label: 'บช.เงินอาหารกลางวัน', val: 'ดอกเบี้ยอาหารกลางวัน', fund: 'fund-state-lunch-interest' },
+                                        { label: 'บช.เงินอุดหนุนอื่น', val: 'ดอกเบี้ยเงินอุดหนุน', fund: 'fund-state-subsidy-interest' },
                                         { label: 'บช.เงิน กสศ.', val: 'ดอกเบี้ย กสศ.', fund: 'fund-eef' },
                                         { label: 'บช.เงินรายได้สถานศึกษา', val: 'ดอกเบี้ยรายได้สถานศึกษา', fund: 'fund-school-income' }
                                     ].map(btn => (
@@ -1360,7 +1359,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     )}
 
                     {/* === โหมดเงินรายได้แผ่นดิน - จ่าย === */}
-                    {addFundType === 'fund-state' && addTransactionType === 'expense' && (
+                    {addFundType?.startsWith('fund-state') && addTransactionType === 'expense' && (
                         <div className="mt-2">
                             {/* ปุ่มสลับโหมด */}
                             <div className="flex gap-1.5 mb-3">
@@ -1518,7 +1517,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     )}
 
                     {/* === โหมดปกติ + โหมดกลุ่ม (ไม่ใช่ภาษี 1%, ปัจจัยยากจน, กสศ., รายได้แผ่นดิน โหมดจ่าย) === */}
-                    {!(addFundType === 'fund-tax' && !isGroupMode) && !(addFundType === 'fund-poor' && addTransactionType === 'expense' && !isGroupMode) && !(addFundType === 'fund-eef' && addTransactionType === 'expense' && !isGroupMode) && !(addFundType === 'fund-state' && addTransactionType === 'expense' && !isGroupMode) && (
+                    {!(addFundType === 'fund-tax' && !isGroupMode) && !(addFundType === 'fund-poor' && addTransactionType === 'expense' && !isGroupMode) && !(addFundType === 'fund-eef' && addTransactionType === 'expense' && !isGroupMode) && !(addFundType?.startsWith('fund-state') && addTransactionType === 'expense' && !isGroupMode) && (
                         <>
                             {/* Separator with count */}
                             <div className="flex items-center justify-between py-3 border-t border-gray-200 mt-2">

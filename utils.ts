@@ -9,7 +9,8 @@ export const FUND_TYPE_OPTIONS = [
   { value: 'fund-poor', label: 'เงินปัจจัยพื้นฐานนักเรียนยากจน', group: 'เงินงบประมาณ' },
 
   // เงินรายได้แผ่นดิน
-  { value: 'fund-state', label: 'เงินรายได้แผ่นดิน(ดอกเบี้ย)', group: 'เงินรายได้แผ่นดิน' },
+  { value: 'fund-state-subsidy-interest', label: 'เงินรายได้แผ่นดิน(ดอกเบี้ยเงินอุดหนุน)', group: 'เงินรายได้แผ่นดิน' },
+  { value: 'fund-state-lunch-interest', label: 'เงินรายได้แผ่นดิน(ดอกเบี้ยอาหารกลางวัน)', group: 'เงินรายได้แผ่นดิน' },
 
   // เงินนอกงบประมาณ
   { value: 'fund-lunch', label: 'เงินอาหารกลางวัน', group: 'เงินนอกงบประมาณ' },

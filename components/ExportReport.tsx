@@ -114,7 +114,8 @@ const ExportReport: React.FC = () => {
         const fyStart = `${fyBE - 543 - 1}-10-01`;
         const balances: Record<string, number> = {};
         transactions.filter(t => t.date < fyStart).forEach(t => {
-            const k = t.fundType;
+            let k = t.fundType;
+            if (k && k.startsWith('fund-state')) k = 'fund-state';
             balances[k] = (balances[k] || 0) + (t.income || 0) - (t.expense || 0);
         });
         const rows = FUND_ROWS.map(r => ({
