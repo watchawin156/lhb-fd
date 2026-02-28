@@ -555,7 +555,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     id: Date.now(),
                     date: addDate,
                     docNo: addDocNo,
-                    description: `ส่งดอกเบี้ย ${stateManualDesc}`,
+                    description: `ส่ง ดอกเบี้ยเงินอุดหนุน`,
                     fundType: addFundType || 'fund-state-subsidy-interest',
                     income: 0,
                     expense: amt,
@@ -588,7 +588,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     id: Date.now(),
                     date: addDate,
                     docNo: addDocNo,
-                    description: `ส่งดอกเบี้ย ${extractFundName(selectedTx.description || 'เงินรายได้แผ่นดิน')}`,
+                    description: `ส่ง ดอกเบี้ยเงินอุดหนุน`,
                     fundType: selectedTx.fundType || 'fund-state-subsidy-interest',
                     income: 0,
                     expense: amt,
@@ -745,98 +745,21 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                 </>
                             ) : null}
 
-                            {/* Borrow Toggle Button */}
-                            <button type="button"
-                                onClick={() => {
-                                    if (showBorrowMode) {
-                                        setShowBorrowMode(false);
-                                        setBorrowAmount('');
-                                        setBorrowPurpose('');
-                                        setSelectedBankId('');
-                                        setPdfBlobUrl(null);
-                                        setBorrowSubmitted(false);
-                                    } else {
-                                        setShowBorrowMode(true);
-                                    }
-                                }}
-                                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${showBorrowMode
-                                    ? 'bg-orange-500 text-white'
-                                    : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                                    }`}>
-                                <span className="material-symbols-outlined text-sm">currency_exchange</span>
-                                {showBorrowMode ? 'ยืมเงิน' : 'ยืม'}
-                            </button>
+                            {/* Borrow Toggle Button was here, removed per user request */}
 
                             <button type="button" onClick={onClose}
                                 className="text-blue-500 hover:text-blue-700 text-sm font-semibold">ปิด</button>
                         </div>
                     </div>
                     {/* Expense Type Toggle */}
-                    {!showBorrowMode && (
-                        <div className="flex gap-2 mt-2">
-                            <button type="button" onClick={() => setAddTransactionType('income')}
-                                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border-2 flex items-center justify-center gap-1 ${addTransactionType === 'income'
-                                    ? 'bg-green-500 border-green-500 text-white shadow-sm'
-                                    : 'bg-white border-gray-200 text-gray-400 hover:border-green-300'}`}>
-                                <span className="material-symbols-outlined text-base">arrow_downward</span> รายรับ
-                            </button>
-                            <button type="button" onClick={() => setAddTransactionType('expense')}
-                                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border-2 flex items-center justify-center gap-1 ${addTransactionType === 'expense'
-                                    ? 'bg-red-500 border-red-500 text-white shadow-sm'
-                                    : 'bg-white border-gray-200 text-gray-400 hover:border-red-300'}`}>
-                                <span className="material-symbols-outlined text-base">arrow_upward</span> รายจ่าย
-                            </button>
-                        </div>
-                    )}
+                    {/* The user requested to hide the toggle buttons entirely. */}
                 </div>
 
                 {/* Scrollable content */}
                 <div className="flex-1 overflow-y-auto px-8">
 
-                    {/* Borrow UI */}
-                    {showBorrowMode && !borrowSubmitted && (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-500 mb-1 block">ยืมจากกองทุน</label>
-                                    <select value={borrowFromFund} onChange={e => setBorrowFromFund(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white outline-none focus:border-blue-400 transition-colors">
-                                        <option value="">-- เลือกกองทุนต้นทาง --</option>
-                                        {FUND_TYPE_OPTIONS.map(opt => (
-                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium text-gray-500 mb-1 block">ยอดคงเหลือ</label>
-                                    <p className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200"><span className="font-semibold">฿{fmtMoney(fundBalance)}</span></p>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium text-gray-500 mb-1 block">จำนวนเงินที่จะยืม</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">฿</span>
-                                        <input type="number" value={borrowAmount} onChange={e => setBorrowAmount(e.target.value)}
-                                            className="w-full pl-8 px-4 py-3 rounded-xl border border-gray-200 bg-white outline-none focus:border-blue-400" placeholder="0.00" />
-                                    </div>
-                                    {borrowAmountNum > fundBalance && (
-                                        <p className="text-xs text-amber-800 mt-1">ยอดขาด {fmtMoney(shortfallAmount)} บาท</p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium text-gray-500 mb-1 block">วัตถุประสงค์</label>
-                                    <input type="text" value={borrowPurpose} onChange={e => setBorrowPurpose(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white outline-none focus:border-blue-400" placeholder="เหตุผล / โครงการ" />
-                                </div>
-                            </div>
-                            <div className="pt-4 flex gap-3">
-                                <button type="button" onClick={() => setShowBorrowMode(false)}
-                                    className="flex-1 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">ยกเลิก</button>
-                                <button type="button" onClick={handleBorrowSubmit}
-                                    className="flex-1 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold">ยืนยันยืม</button>
-                            </div>
-                            {isGeneratingPDF && <p className="text-center text-sm text-gray-500 mt-2">กำลังสร้างเอกสาร...</p>}
-                        </div>
-                    )}
+                    {/* Borrow UI removed since modal no longer supports swapping to borrow mode */}
+
                     {showBorrowMode && borrowSubmitted && (
                         <div className="text-center py-16">
                             <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto">
@@ -962,7 +885,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                             </div>
                         )}
 
-                        {addTransactionType === 'income' && !isGroupMode && (
+                        {addTransactionType === 'income' && addFundType?.startsWith('fund-state') && !isGroupMode && (
                             <div className="mt-4 pb-2 animate-fade-in">
                                 <label className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1">
                                     <span className="material-symbols-outlined text-sm">savings</span>
@@ -971,9 +894,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                 <div className="flex flex-wrap gap-2">
                                     {[
                                         { label: 'บช.เงินอาหารกลางวัน', val: 'ดอกเบี้ยอาหารกลางวัน', fund: 'fund-state-lunch-interest' },
-                                        { label: 'บช.เงินอุดหนุนอื่น', val: 'ดอกเบี้ยเงินอุดหนุน', fund: 'fund-state-subsidy-interest' },
-                                        { label: 'บช.เงิน กสศ.', val: 'ดอกเบี้ย กสศ.', fund: 'fund-eef' },
-                                        { label: 'บช.เงินรายได้สถานศึกษา', val: 'ดอกเบี้ยรายได้สถานศึกษา', fund: 'fund-school-income' }
+                                        { label: 'บช.เงินอุดหนุนอื่น', val: 'ดอกเบี้ยเงินอุดหนุน', fund: 'fund-state-subsidy-interest' }
                                     ].map(btn => (
                                         <button key={btn.val} type="button"
                                             onClick={() => {
@@ -1650,8 +1571,8 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                         บันทึก{addTransactionType === 'income' ? 'รายรับ' : 'รายจ่าย'}{isGroupMode ? ` (${subItems.filter(s => s.amount && parseFloat(s.amount) > 0).length} รายการ)` : ''}
                     </button>
                 </div>
-            </form>
-        </div>
+            </form >
+        </div >
     );
 };
 export default CashBookAddModal;

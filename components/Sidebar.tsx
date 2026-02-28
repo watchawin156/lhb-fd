@@ -192,16 +192,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userRole, isS
           <SidebarGroup title="เงินรายได้แผ่นดิน" isCollapsed={isCollapsed}>
             <NavItem
               icon="account_balance_wallet"
-              label="ดอกเบี้ยเงินอุดหนุน"
-              isActive={activePage === 'fund-state-subsidy-interest'}
-              onClick={() => onNavigate('fund-state-subsidy-interest')}
-              isCollapsed={isCollapsed}
-            />
-            <NavItem
-              icon="account_balance_wallet"
-              label="ดอกเบี้ยอาหารกลางวัน"
-              isActive={activePage === 'fund-state-lunch-interest'}
-              onClick={() => onNavigate('fund-state-lunch-interest')}
+              label="เงินรายได้แผ่นดิน(ดอกเบี้ย)"
+              isActive={activePage === 'fund-state' || activePage.startsWith('fund-state-')}
+              onClick={() => onNavigate('fund-state')}
               isCollapsed={isCollapsed}
             />
           </SidebarGroup>

@@ -30,7 +30,9 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
     const [fundSearchQuery, setFundSearchQuery] = useState('');
 
     const pageTransactions = useMemo(() => {
-        let filtered = transactions.filter(t => t.fundType === pageId);
+        let filtered = transactions.filter(t =>
+            pageId === 'fund-state' ? t.fundType.startsWith('fund-state') : t.fundType === pageId
+        );
 
         if (fundSearchQuery) {
             const q = fundSearchQuery.toLowerCase();
@@ -107,8 +109,20 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
             if (formData.recipientType === 'juristic' && expenseAmount >= 500) taxAmount = expenseAmount * 0.01;
             else if (formData.recipientType === 'individual' && expenseAmount >= 10000) taxAmount = expenseAmount * 0.01;
         }
+        let finalFundType = pageId;
+        if (pageId === 'fund-state') {
+            if (formData.description.includes('อาหารกลางวัน') || formData.description.includes('ดอกเบี้ยอาหารกลางวัน')) {
+                finalFundType = 'fund-state-lunch-interest';
+            } else if (formData.description.includes('อุดหนุน') || formData.description.includes('ดอกเบี้ยเงินอุดหนุน')) {
+                finalFundType = 'fund-state-subsidy-interest';
+            } else {
+                alert('กรุณาระบุคำว่า "ดอกเบี้ยอาหารกลางวัน" หรือ "ดอกเบี้ยเงินอุดหนุน" ในชื่อรายการสำหรับหมวดเงินรายได้แผ่นดิน');
+                return;
+            }
+        }
+
         const newTransaction: Transaction = {
-            id: Date.now(), fundType: pageId, date: formData.date, docNo: formData.docNo,
+            id: Date.now(), fundType: finalFundType, date: formData.date, docNo: formData.docNo,
             description: formData.description, income: incomeAmount, expense: expenseAmount,
             payer: formData.transactionType === 'income' ? formData.payer : undefined,
             payee: formData.transactionType === 'expense' ? formData.payee : undefined,
