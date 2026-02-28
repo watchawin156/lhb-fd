@@ -1,0 +1,165 @@
+{
+  "routes": [
+    {
+      "routePath": "/api/transactions/:id",
+      "mountPath": "/api/transactions",
+      "method": "DELETE",
+      "module": [
+        "api/transactions/[id].ts:onRequestDelete"
+      ]
+    },
+    {
+      "routePath": "/api/transactions/:id",
+      "mountPath": "/api/transactions",
+      "method": "OPTIONS",
+      "module": [
+        "api/transactions/[id].ts:onRequestOptions"
+      ]
+    },
+    {
+      "routePath": "/api/transactions/:id",
+      "mountPath": "/api/transactions",
+      "method": "PUT",
+      "module": [
+        "api/transactions/[id].ts:onRequestPut"
+      ]
+    },
+    {
+      "routePath": "/api/audit-logs",
+      "mountPath": "/api",
+      "method": "DELETE",
+      "module": [
+        "api/audit-logs.ts:onRequestDelete"
+      ]
+    },
+    {
+      "routePath": "/api/audit-logs",
+      "mountPath": "/api",
+      "method": "GET",
+      "module": [
+        "api/audit-logs.ts:onRequestGet"
+      ]
+    },
+    {
+      "routePath": "/api/audit-logs",
+      "mountPath": "/api",
+      "method": "OPTIONS",
+      "module": [
+        "api/audit-logs.ts:onRequestOptions"
+      ]
+    },
+    {
+      "routePath": "/api/audit-logs",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/audit-logs.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/backup",
+      "mountPath": "/api",
+      "method": "GET",
+      "module": [
+        "api/backup.ts:onRequestGet"
+      ]
+    },
+    {
+      "routePath": "/api/backup",
+      "mountPath": "/api",
+      "method": "OPTIONS",
+      "module": [
+        "api/backup.ts:onRequestOptions"
+      ]
+    },
+    {
+      "routePath": "/api/backup",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/backup.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/backup",
+      "mountPath": "/api",
+      "method": "PUT",
+      "module": [
+        "api/backup.ts:onRequestPut"
+      ]
+    },
+    {
+      "routePath": "/api/settings",
+      "mountPath": "/api",
+      "method": "GET",
+      "module": [
+        "api/settings.ts:onRequestGet"
+      ]
+    },
+    {
+      "routePath": "/api/settings",
+      "mountPath": "/api",
+      "method": "OPTIONS",
+      "module": [
+        "api/settings.ts:onRequestOptions"
+      ]
+    },
+    {
+      "routePath": "/api/settings",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/settings.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/telegram-send",
+      "mountPath": "/api",
+      "method": "OPTIONS",
+      "module": [
+        "api/telegram-send.ts:onRequestOptions"
+      ]
+    },
+    {
+      "routePath": "/api/telegram-send",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/telegram-send.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/transactions",
+      "mountPath": "/api",
+      "method": "GET",
+      "module": [
+        "api/transactions.ts:onRequestGet"
+      ]
+    },
+    {
+      "routePath": "/api/transactions",
+      "mountPath": "/api",
+      "method": "OPTIONS",
+      "module": [
+        "api/transactions.ts:onRequestOptions"
+      ]
+    },
+    {
+      "routePath": "/api/transactions",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/transactions.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api",
+      "mountPath": "/api",
+      "method": "",
+      "middleware": [
+        "api/_middleware.ts:onRequest"
+      ]
+    }
+  ],
+  "baseURL": "/"
+}

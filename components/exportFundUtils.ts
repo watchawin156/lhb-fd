@@ -270,12 +270,22 @@ export const handleExportPDF = async (
                     let t = cells[i] || '';
                     const f = b ? fontBold : font;
                     const PAD = 4;
-                    while (t.length > 0 && f.widthOfTextAtSize(t, FS_TABLE) > cw - PAD * 2) t = t.slice(0, -1);
-                    const tw = f.widthOfTextAtSize(t, FS_TABLE);
+                    let currentSize = FS_TABLE;
+                    const fullW = f.widthOfTextAtSize(t, FS_TABLE);
+                    if (fullW > cw - PAD * 2) {
+                        const scale = (cw - PAD * 2) / fullW;
+                        currentSize = Math.max(8, FS_TABLE * scale);
+                        if (currentSize === 8) {
+                            while (t.length > 0 && f.widthOfTextAtSize(t, 8) > cw - PAD * 2) t = t.slice(0, -1);
+                        }
+                    }
+                    const tw = f.widthOfTextAtSize(t, currentSize);
                     let xPos = cx + PAD;
                     if (customAln[i] === 'c') xPos = cx + (cw - tw) / 2;
                     if (customAln[i] === 'r') xPos = cx + cw - tw - PAD;
-                    sPage.drawText(t, { x: xPos, y: yy - h + 5, size: FS_TABLE, font: f, color: BLK });
+
+                    const yAdjust = (FS_TABLE - currentSize) / 2;
+                    sPage.drawText(t, { x: xPos, y: yy - h + 5 + yAdjust, size: currentSize, font: f, color: BLK });
                     cx += cw;
                 });
                 return yy - h;
@@ -385,16 +395,27 @@ export const handleExportPDF = async (
         const f = opts.bold ? fontBold : font;
         const PAD = 8;
         let s = txt;
+        let currentSize = FS_TABLE;
         if (opts.maxW) {
-            while (s.length > 0 && f.widthOfTextAtSize(s, FS_TABLE) > opts.maxW - PAD * 2) {
-                s = s.slice(0, -1);
+            const fullW = f.widthOfTextAtSize(s, FS_TABLE);
+            if (fullW > opts.maxW - PAD * 2) {
+                const scale = (opts.maxW - PAD * 2) / fullW;
+                currentSize = Math.max(8, FS_TABLE * scale); // limit minimum font size to 8
+
+                if (currentSize === 8) {
+                    while (s.length > 0 && f.widthOfTextAtSize(s, 8) > opts.maxW - PAD * 2) {
+                        s = s.slice(0, -1);
+                    }
+                }
             }
         }
-        const tw = f.widthOfTextAtSize(s, FS_TABLE);
+        const tw = f.widthOfTextAtSize(s, currentSize);
         let xPos = x + PAD;
         if (opts.align === 'c' && opts.maxW) xPos = x + (opts.maxW - tw) / 2;
         if (opts.align === 'r' && opts.maxW) xPos = x + opts.maxW - tw - PAD;
-        pg.drawText(s, { x: xPos, y, size: FS_TABLE, font: f, color: BLK });
+
+        const yAdjust = (FS_TABLE - currentSize) / 2;
+        pg.drawText(s, { x: xPos, y: y + yAdjust, size: currentSize, font: f, color: BLK });
     };
 
     const drawHeader = (pg: ReturnType<typeof pdfDoc.addPage>, yy: number) => {

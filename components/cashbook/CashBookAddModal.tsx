@@ -659,10 +659,18 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch'))?.id || finalBankId;
                 }
             } else if (addTransactionType === 'income') {
-                if (descMatch.includes('รับดอกเบี้ยบช รายได้สถานศึกษา')) {
-                    finalFundType = 'fund-school-income';
-                } else if (descMatch.includes('รับเงินดอกเบี้ยบัญชี กสศ')) {
+                if (descMatch.includes('ดอกเบี้ยอาหารกลางวัน')) {
+                    finalFundType = 'fund-lunch';
+                    finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch'))?.id || finalBankId;
+                } else if (descMatch.includes('ดอกเบี้ยเงินอุดหนุน')) {
+                    finalFundType = 'fund-subsidy';
+                    finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อุดหนุน') || b.fundTypes.includes('fund-subsidy'))?.id || finalBankId;
+                } else if (descMatch.includes('ดอกเบี้ย กสศ') || descMatch.includes('รับเงินดอกเบี้ยบัญชี กสศ')) {
                     finalFundType = 'fund-eef';
+                    finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('กสศ') || b.fundTypes.includes('fund-eef'))?.id || finalBankId;
+                } else if (descMatch.includes('ดอกเบี้ยรายได้สถานศึกษา') || descMatch.includes('รับดอกเบี้ยบช รายได้สถานศึกษา')) {
+                    finalFundType = 'fund-school-income';
+                    finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('รายได้สถานศึกษา') || b.fundTypes.includes('fund-school-income'))?.id || finalBankId;
                 }
             }
 
@@ -934,8 +942,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                         </div>
                         {((addTransactionType === 'income' && addFundType === 'fund-state') || (addTransactionType === 'expense' && addFundType === 'fund-state' && isStateManualMode)) && (
                             <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 animate-fade-in mt-4">
-                                <label className="text-sm font-semibold text-blue-800 mb-1 block">เงินรายได้แผ่นดิน(ดอกเบี้ย) — เลือกบัญชีธนาคาร</label>
-                                <p className="text-xs text-blue-600 mb-3 opacity-80">โปรดระบุบัญชีธนาคารเป้าหมาย</p>
+                                <label className="text-sm font-semibold text-blue-800 mb-1 block">เงินรายได้แผ่นดิน(ดอกเบี้ย) — เลือกบัญชีธนาคารเป้าหมาย</label>
                                 <select value={addBankId} onChange={e => setAddBankId(e.target.value)}
                                     className="w-full px-4 py-3 rounded-xl border border-blue-200 bg-white text-base outline-none focus:border-blue-400 transition-colors">
                                     <option value="">-- กรุณาเลือกบัญชีธนาคาร --</option>
@@ -945,6 +952,36 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                         <option key={acc.id} value={acc.id}>{acc.name} ({acc.bankName} {acc.accountNo})</option>
                                     ))}
                                 </select>
+                            </div>
+                        )}
+
+                        {addTransactionType === 'income' && !isGroupMode && (
+                            <div className="mt-4 pb-2 animate-fade-in">
+                                <label className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-sm">savings</span>
+                                    ตัวเลือกด่วน: รับดอกเบี้ยเข้าบัญชี
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        { label: 'บช.เงินอาหารกลางวัน', val: 'ดอกเบี้ยอาหารกลางวัน', fund: 'fund-lunch' },
+                                        { label: 'บช.เงินอุดหนุนอื่น', val: 'ดอกเบี้ยเงินอุดหนุน', fund: 'fund-subsidy' },
+                                        { label: 'บช.เงิน กสศ.', val: 'ดอกเบี้ย กสศ.', fund: 'fund-eef' },
+                                        { label: 'บช.เงินรายได้สถานศึกษา', val: 'ดอกเบี้ยรายได้สถานศึกษา', fund: 'fund-school-income' }
+                                    ].map(btn => (
+                                        <button key={btn.val} type="button"
+                                            onClick={() => {
+                                                setAddFundType(btn.fund);
+                                                updateSub(subItems[0].id, 'description', `รับเงิน${btn.val}`);
+                                                // Bank ID will be auto-assigned in handleAddSubmit logic based on description
+                                                const bankIdMatch = schoolSettings.bankAccounts?.find((b: any) => b.fundTypes.includes(btn.fund))?.id;
+                                                if (bankIdMatch) setAddBankId(bankIdMatch);
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 text-[11px] font-semibold hover:bg-green-100 hover:border-green-300 transition-all flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[12px]">add</span>
+                                            {btn.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>

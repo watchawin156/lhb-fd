@@ -431,6 +431,7 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                                 { label: 'วันที่', value: fmtShort(selectedTx.date) },
                                 { label: 'ที่เอกสาร', value: selectedTx.docNo || '-' },
                                 { label: 'รายการ', value: selectedTx.description },
+                                { label: 'หมวดหมู่', value: FUND_TYPE_OPTIONS.find(o => o.value === selectedTx.fundType)?.group || '-' },
                                 { label: 'ประเภท', value: FUND_TYPE_OPTIONS.find(o => o.value === selectedTx.fundType)?.label || selectedTx.fundType },
                                 { label: selectedTx.income > 0 ? 'จำนวนรับ' : 'จำนวนจ่าย', value: `฿${fmtMoney(selectedTx.income > 0 ? selectedTx.income : selectedTx.expense)}` },
                                 { label: 'ชื่อหัวรายการ', value: (selectedTx.payer || selectedTx.payee || '-') },

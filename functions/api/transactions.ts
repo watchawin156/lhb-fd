@@ -63,7 +63,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             Object.keys(extra).length > 0 ? JSON.stringify(extra) : null
         ).run();
 
-        return Response.json({ id: meta.last_row_id, ...body }, { status: 201 });
+        return Response.json({ ...body, id: meta.last_row_id }, { status: 201 });
     } catch (e: any) {
         return Response.json({ error: e.message }, { status: 500 });
     }
