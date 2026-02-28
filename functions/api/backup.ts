@@ -128,6 +128,8 @@ const FUNDS: Record<string, string> = {
     'fund-15y-activity': 'กิจกรรมพัฒนาคุณภาพ',
     'fund-poor': 'เงินปัจจัยพื้นฐานยากจน',
     'fund-state': 'เงินรายได้แผ่นดิน',
+    'fund-state-subsidy-interest': 'ดอกเบี้ยเงินอุดหนุน',
+    'fund-state-lunch-interest': 'ดอกเบี้ยอาหารกลางวัน',
     'fund-lunch': 'เงินอาหารกลางวัน',
     'fund-eef': 'เงิน กสศ.',
     'fund-school-income': 'เงินรายได้สถานศึกษา',
