@@ -8,7 +8,8 @@ interface Env {
 
 export const onRequestPut: PagesFunction<Env> = async ({ params, request, env }) => {
     try {
-        const id = params.id;
+        const idParam = params.id as string;
+        const id = isNaN(Number(idParam)) ? idParam : Number(idParam);
         const body: any = await request.json();
         const extra: any = {};
         const knownKeys = ['date', 'docNo', 'description', 'fundType', 'income', 'expense', 'payer', 'payee', 'payeeType', 'bankId', 'incomeRefId'];
@@ -47,7 +48,8 @@ export const onRequestPut: PagesFunction<Env> = async ({ params, request, env })
 
 export const onRequestDelete: PagesFunction<Env> = async ({ params, env }) => {
     try {
-        const id = params.id;
+        const idParam = params.id as string;
+        const id = isNaN(Number(idParam)) ? idParam : Number(idParam);
         await env.DB.prepare('DELETE FROM transactions WHERE id = ?').bind(id).run();
         return Response.json({ success: true });
     } catch (e: any) {

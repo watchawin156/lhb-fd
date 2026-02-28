@@ -310,11 +310,12 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // move money back if we know the funds involved
     if (loan.fromFund && loan.toFund) {
       try {
+        const returnPrefix = schoolSettings.docNumberSettings?.returnPrefix || 'คืน-';
         // expense from the fund that received money
         await doAddTransaction({
           id: Date.now(),
           date: txDate,
-          docNo: `คืน-${loanId}`,
+          docNo: `${returnPrefix}${loanId}`,
           description: `คืนเงินยืม ${loanId}`,
           fundType: loan.toFund,
           income: 0,
@@ -326,7 +327,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         await doAddTransaction({
           id: Date.now() + 1,
           date: txDate,
-          docNo: `คืน-${loanId}`,
+          docNo: `${returnPrefix}${loanId}`,
           description: `คืนเงินยืม ${loanId}`,
           fundType: loan.fromFund,
           income: amount,

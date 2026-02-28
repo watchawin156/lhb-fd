@@ -25,8 +25,8 @@ const CashBookCheckModal: React.FC<CashBookCheckModalProps> = ({ isOpen, onClose
             const txt = (t.description + ' ' + (t.payer || '') + ' ' + (t.payee || '')).toLowerCase();
             let checkFlagged = false;
 
-            if (txt.includes('ภาษี') && t.fundType !== 'fund-tax') {
-                flagged.push({ tx: t, suggestFund: 'fund-tax', reason: 'พบคำว่า "ภาษี" แต่รายการไม่ได้อยู่ในหมวดเงินภาษี 1%' });
+            if (txt.includes('ภาษี') && !txt.includes('ยืมจาก เงินภาษี 1%') && t.fundType !== 'fund-tax') {
+                flagged.push({ tx: t, suggestFund: 'fund-tax', reason: 'พบคำว่า "ภาษี" แต่รายการไม่ได้อยู่ในหมวดเงินภาษี 1% (ยกเว้นการยืม)' });
                 checkFlagged = true;
             } else if (txt.includes('ดอกเบี้ย') && t.fundType !== 'fund-state') {
                 flagged.push({ tx: t, suggestFund: 'fund-state', reason: 'พบคำว่า "ดอกเบี้ย" แต่รายการไม่ได้อยู่ในหมวดเงินรายได้แผ่นดิน' });

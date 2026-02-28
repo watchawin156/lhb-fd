@@ -450,37 +450,9 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                         )}
 
                         {linkedLoan && (
-                            <div className="space-y-2 mb-3">
-                                <button
-                                    onClick={() => handleOpenLoanPDF(false)}
-                                    className="w-full py-2 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center gap-1"
-                                >
-                                    <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF ขอยืม
-                                </button>
-
-                                {hasReturnHistory && (
-                                    <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 space-y-2">
-                                        <p className="text-xs font-semibold text-teal-900">
-                                            PDF คืนเงินย้อนหลัง ({repaymentHistoryForUI.length} ฉบับ)
-                                        </p>
-                                        <div className="max-h-36 overflow-auto space-y-1.5 pr-1">
-                                            {repaymentHistoryForUI.map((record, index) => (
-                                                <button
-                                                    key={`${record.id}-${record.date}-${record.amount}-${index}`}
-                                                    onClick={() => handleOpenLoanPDF(true, record.amount, record.date)}
-                                                    className="w-full rounded-lg border border-teal-300 bg-white px-2 py-1.5 text-left hover:bg-teal-100 transition-colors"
-                                                >
-                                                    <p className="text-xs font-semibold text-teal-800">
-                                                        PDF คืนเงิน #{repaymentHistoryForUI.length - index}
-                                                    </p>
-                                                    <p className="text-[11px] text-teal-700">
-                                                        {fmtShort(record.date)} - ฿{fmtMoney(record.amount)}
-                                                    </p>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                            <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                                <p className="text-xs text-emerald-700">สัญญายืม: {linkedLoan.id}</p>
+                                <p className="text-xs text-emerald-800 font-semibold">ยอดคงเหลือ: ฿{fmtMoney(outstanding)}</p>
                             </div>
                         )}
 

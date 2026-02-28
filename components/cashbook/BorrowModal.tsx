@@ -12,7 +12,7 @@ interface BorrowModalProps {
 
 const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount = 0 }) => {
     const { transactions, addLoan, addTransaction, schoolSettings } = useSchoolData();
-    
+
     // Form state
     const [selectedBankId, setSelectedBankId] = useState<string>('');
     const [borrowAmount, setBorrowAmount] = useState(needAmount.toString());
@@ -23,14 +23,14 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
     // Calculate bank account balances
     const bankBalances = useMemo(() => {
         const balances: Record<string, number> = {};
-        
+
         schoolSettings.bankAccounts?.forEach(acc => {
             const balance = transactions
                 .filter(t => acc.fundTypes.includes(t.fundType))
                 .reduce((sum, t) => sum + (t.income || 0) - (t.expense || 0), 0);
             balances[acc.id] = balance;
         });
-        
+
         return balances;
     }, [transactions, schoolSettings.bankAccounts]);
 
@@ -44,18 +44,19 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
             alert('กรุณาเลือกบัญชีเงินฝากที่ต้องการยืม');
             return;
         }
-        
+
         if (!borrowAmountNum || borrowAmountNum <= 0) {
             alert('กรุณากรอกจำนวนเงิน');
             return;
         }
-        
+
         if (!borrowPurpose) {
             alert('กรุณากรอกวัตถุประสงค์การยืม');
             return;
         }
 
-        const loanId = `LN-${new Date().getFullYear() + 543}-${String(new Date().getTime()).slice(-6)}`;
+        const borrowPrefix = schoolSettings.docNumberSettings?.borrowPrefix || 'LN-';
+        const loanId = `${borrowPrefix}${new Date().getFullYear() + 543}-${String(new Date().getTime()).slice(-6)}`;
         const today = new Date().toISOString().slice(0, 10);
 
         const newLoan = {
@@ -74,7 +75,7 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
 
         try {
             setIsGeneratingPDF(true);
-            
+
             // Add loan to context
             addLoan(newLoan);
 
@@ -94,7 +95,7 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
 
             // Generate PDF as blob
             const pdfBytes = await buildLoanDocPDF(newLoan, false, schoolSettings, today);
-            const blob = new Blob([pdfBytes as unknown as Uint8Array], { type: 'application/pdf' });
+            const blob = new Blob([new Uint8Array(pdfBytes as unknown as ArrayBuffer)], { type: 'application/pdf' });
             const url = URL.createObjectURL(blob);
             setPdfBlobUrl(url);
 
@@ -112,7 +113,7 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
             a.href = pdfBlobUrl;
             a.download = `loan-${new Date().toISOString().slice(0, 10)}.pdf`;
             a.click();
-            
+
             // Reset and close
             setBorrowAmount(needAmount.toString());
             setBorrowPurpose('');
@@ -152,7 +153,7 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
                         {borrowAmountNum > selectedBankBalance && (
                             <div className="bg-amber-50 border border-amber-300 rounded-lg p-3">
                                 <p className="text-sm text-amber-900">
-                                    <span className="font-semibold">⚠️ จำนวนเงินที่ขาดไป:</span><br/>
+                                    <span className="font-semibold">⚠️ จำนวนเงินที่ขาดไป:</span><br />
                                     {fmtMoney(shortfallAmount)} บาท
                                 </p>
                             </div>

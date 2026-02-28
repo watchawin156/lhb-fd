@@ -120,6 +120,12 @@ export interface SchoolSettingsData {
   affiliation: string;
   bankAccounts: BankAccount[];
   logo?: string; // base64 image
+  docNumberSettings?: {
+    incomePrefix: string;
+    expensePrefix: string;
+    borrowPrefix: string;
+    returnPrefix: string;
+  };
 }
 
 export interface AuditLogEntry {

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSchoolData } from '../context/SchoolContext';
 import { formatThaiDateShort } from '../utils';
 
@@ -9,6 +9,17 @@ interface AuditLogProps {
 
 const AuditLog: React.FC<AuditLogProps> = ({ onNavigate }) => {
     const { auditLogs } = useSchoolData();
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredLogs = useMemo(() => {
+        if (!searchQuery) return auditLogs;
+        const q = searchQuery.toLowerCase();
+        return auditLogs.filter(log =>
+            log.action.toLowerCase().includes(q) ||
+            log.details.toLowerCase().includes(q) ||
+            log.module.toLowerCase().includes(q)
+        );
+    }, [auditLogs, searchQuery]);
 
     const getPageForModule = (module: string) => {
         // Now module stores the actual pageId we can navigate to, except for 'settings' (could map to 'settings-general')
@@ -28,9 +39,21 @@ const AuditLog: React.FC<AuditLogProps> = ({ onNavigate }) => {
                 </div>
 
                 <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                    <div className="p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50">
-                        <h3 className="font-bold text-text dark:text-text-dark">รายการเคลื่อนไหวระบบล่าสุด</h3>
-                        <p className="text-xs text-text-muted">บันทึกการกระทำของผู้ใช้งานทั้งหมด</p>
+                    <div className="p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <h3 className="font-bold text-text dark:text-text-dark">รายการเคลื่อนไหวระบบล่าสุด</h3>
+                            <p className="text-xs text-text-muted">บันทึกการกระทำของผู้ใช้งานทั้งหมด</p>
+                        </div>
+                        <div className="relative w-full sm:w-64">
+                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
+                            <input
+                                type="text"
+                                placeholder="ค้นหาการกระทำ, เมนู..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
+                            />
+                        </div>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -46,7 +69,7 @@ const AuditLog: React.FC<AuditLogProps> = ({ onNavigate }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                {auditLogs.sort((a, b) => b.id - a.id).map((log) => {
+                                {filteredLogs.sort((a, b) => b.id - a.id).map((log) => {
                                     const date = new Date(log.timestamp);
                                     const timeStr = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
                                     const targetPage = getPageForModule(log.module);

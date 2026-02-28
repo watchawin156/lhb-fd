@@ -36,6 +36,23 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     const [addDocNo, setAddDocNo] = useState('');
     const [addBankId, setAddBankId] = useState<string>('');
 
+    // --- Inject Auto Doc Number Effect ---
+    React.useEffect(() => {
+        if (!isOpen) return;
+        const pfx = schoolSettings?.docNumberSettings;
+        if (!pfx) return;
+
+        if (!showBorrowMode) {
+            if (addTransactionType === 'income' && pfx.incomePrefix) {
+                setAddDocNo(prev => prev === '' || prev === pfx.expensePrefix ? pfx.incomePrefix : prev);
+            } else if (addTransactionType === 'expense' && pfx.expensePrefix) {
+                setAddDocNo(prev => prev === '' || prev === pfx.incomePrefix ? pfx.expensePrefix : prev);
+            }
+        }
+    }, [isOpen, addTransactionType, showBorrowMode, schoolSettings?.docNumberSettings]);
+    // -------------------------------------
+
+
     // Sub-items: description + amount (empty amount = header row)
     // โหมดกลุ่ม: แต่ละรายการมี fundType ของตัวเอง
     interface SubItem { id: number; description: string; amount: string; fundType?: string; }
@@ -188,7 +205,8 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             return;
         }
 
-        const loanId = `LN-${new Date().getFullYear() + 543}-${String(new Date().getTime()).slice(-6)}`;
+        const borrowPrefix = schoolSettings.docNumberSettings?.borrowPrefix || 'LN-';
+        const loanId = `${borrowPrefix}${new Date().getFullYear() + 543}-${String(new Date().getTime()).slice(-6)}`;
         const today = new Date().toISOString().slice(0, 10);
 
         const newLoan = {
@@ -611,43 +629,61 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
         const isInterestMode = addTransactionType === 'income' && addFundType === 'fund-state';
 
-        if (isInterestMode && !addBankId) {
-            alert('กรุณาเลือกบัญชีธนาคารที่รับดอกเบี้ย (เนื่องจากเป็นรายการเงินรายได้แผ่นดิน)');
-            return;
-        }
-
         if (addTransactionType === 'expense') {
             if (!addPayeeType) {
                 alert('กรุณาเลือกประเภทผู้รับเงิน (นิติบุคคล หรือ บุคคลธรรมดา)');
                 return;
             }
-            const fundBalance = transactions
-                .filter((t: any) => t.fundType === addFundType && t.date <= addDate)
-                .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
-            if (subTotal > fundBalance) {
-
+            const isTaxBorrowBypass = headerTitle.includes('ยืมจาก เงินภาษี 1%') || dataItems.some(d => d.description.includes('ยืมจาก เงินภาษี 1%'));
+            if (!isTaxBorrowBypass) {
+                const fundBalance = transactions
+                    .filter((t: any) => t.fundType === addFundType && t.date <= addDate)
+                    .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
             }
-            if (addFundType === 'fund-state' && !addBankId) {
-                alert('กรุณาเลือกบัญชีธนาคารที่จ่ายเงิน (เนื่องจากเป็นรายการเงินรายได้แผ่นดิน)');
+        }
+
+        for (let idx = 0; idx < dataItems.length; idx++) {
+            const s = dataItems[idx];
+            const amt = parseFloat(s.amount);
+
+            let finalFundType = addFundType;
+            let finalBankId = addBankId || undefined;
+            const descMatch = (s.description || '').toLowerCase();
+
+            if (addTransactionType === 'expense') {
+                if (descMatch.includes('เบิกดอกเบี้ยบัญชีเงินอุดหนุนส่งเขต')) {
+                    finalFundType = 'fund-state';
+                    finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อุดหนุน') || b.fundTypes.includes('fund-subsidy'))?.id || finalBankId;
+                } else if (descMatch.includes('เบิกดอกเบี้ยบัญชีเงินอาหารกลางวันส่งเขต')) {
+                    finalFundType = 'fund-state';
+                    finalBankId = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch'))?.id || finalBankId;
+                }
+            } else if (addTransactionType === 'income') {
+                if (descMatch.includes('รับดอกเบี้ยบช รายได้สถานศึกษา')) {
+                    finalFundType = 'fund-school-income';
+                } else if (descMatch.includes('รับเงินดอกเบี้ยบัญชี กสศ')) {
+                    finalFundType = 'fund-eef';
+                }
+            }
+
+            if (finalFundType === 'fund-state' && !finalBankId) {
+                alert(`กรุณาเลือกบัญชีธนาคารสำหรับรายการ '${s.description}' (เนื่องจากเป็นรายการเงินรายได้แผ่นดิน)`);
                 return;
             }
-            for (let idx = 0; idx < dataItems.length; idx++) {
-                const s = dataItems[idx];
-                const amt = parseFloat(s.amount);
-                addTransaction({
-                    id: Date.now() + idx,
-                    date: addDate,
-                    docNo: addDocNo,
-                    description: s.description,
-                    fundType: addFundType,
-                    income: 0,
-                    expense: amt,
-                    payer: '',
-                    payee: headerTitle,
-                    recipientType: addPayeeType === 'legal' ? 'juristic' : 'individual',
-                    bankId: addBankId || undefined,
-                });
-            }
+
+            addTransaction({
+                id: Date.now() + idx,
+                date: addDate,
+                docNo: addDocNo,
+                description: s.description,
+                fundType: finalFundType,
+                income: addTransactionType === 'income' ? amt : 0,
+                expense: addTransactionType === 'expense' ? amt : 0,
+                payer: addTransactionType === 'income' ? headerTitle : '',
+                payee: addTransactionType === 'expense' ? headerTitle : '',
+                recipientType: addTransactionType === 'expense' ? (addPayeeType === 'legal' ? 'juristic' : 'individual') : undefined,
+                bankId: finalBankId,
+            });
         }
 
         onClose();

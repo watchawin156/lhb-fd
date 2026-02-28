@@ -27,12 +27,23 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
     const today = new Date();
     const todayBE = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear() + 543}`;
     const [exportDateInput, setExportDateInput] = useState(todayBE);
+    const [fundSearchQuery, setFundSearchQuery] = useState('');
 
     const pageTransactions = useMemo(() => {
-        return transactions
-            .filter(t => t.fundType === pageId)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [transactions, pageId]);
+        let filtered = transactions.filter(t => t.fundType === pageId);
+
+        if (fundSearchQuery) {
+            const q = fundSearchQuery.toLowerCase();
+            filtered = filtered.filter(t =>
+                (t.description || '').toLowerCase().includes(q) ||
+                (t.docNo || '').toLowerCase().includes(q) ||
+                (t.payee || '').toLowerCase().includes(q) ||
+                (t.payer || '').toLowerCase().includes(q)
+            );
+        }
+
+        return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [transactions, pageId, fundSearchQuery]);
 
     const payeeHistory = useMemo(() => {
         const history: Record<string, 'individual' | 'juristic'> = {};
@@ -201,9 +212,21 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
 
                 {/* Transaction Table */}
                 <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden min-h-[400px]">
-                    <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50">
-                        <h3 className="font-bold text-text dark:text-text-dark">รายการเคลื่อนไหว (Ledger)</h3>
-                        <span className="text-xs text-text-muted">เรียงตามวันที่ล่าสุด</span>
+                    <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50/50">
+                        <div>
+                            <h3 className="font-bold text-text dark:text-text-dark">รายการเคลื่อนไหว (Ledger)</h3>
+                            <span className="text-xs text-text-muted">เรียงตามวันที่ล่าสุด</span>
+                        </div>
+                        <div className="relative w-full sm:w-64">
+                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
+                            <input
+                                type="text"
+                                placeholder="ค้นหารายการ, เลขที่, ชื่อ..."
+                                value={fundSearchQuery}
+                                onChange={(e) => setFundSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
+                            />
+                        </div>
                     </div>
                     <FundViewTable pageId={pageId} pageTransactions={pageTransactions} transactions={transactions} onRowClick={handleRowClick} />
                 </div>
