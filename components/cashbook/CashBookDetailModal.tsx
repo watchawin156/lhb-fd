@@ -51,6 +51,7 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         fundType: '',
         payer: '',
         payee: '',
+        bankId: '',
     });
 
     const selectedTx = useMemo(
@@ -230,6 +231,7 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                 fundType: selectedTx.fundType || '',
                 payer: selectedTx.payer || '',
                 payee: selectedTx.payee || '',
+                bankId: selectedTx.bankId || '',
             });
         }
     }, [isOpen, selectedTx, isEditingTx, showDeletePrompt]);
@@ -247,6 +249,7 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
             expense: selectedTx.expense > 0 ? amt : 0,
             payer: editTxData.payer,
             payee: editTxData.payee,
+            bankId: editTxData.bankId,
         });
         setIsEditingTx(false);
         onClose();
@@ -368,6 +371,20 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                         </div>
 
                         <div>
+                            <label className="text-xs font-semibold text-gray-500 block mb-1">บัญชีธนาคาร</label>
+                            <select
+                                value={editTxData.bankId}
+                                onChange={e => setEditTxData({ ...editTxData, bankId: e.target.value })}
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white transition-colors"
+                            >
+                                <option value="">-- ไม่ระบุ --</option>
+                                {schoolSettings.bankAccounts?.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name} ({b.accountNo})</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
                             <label className="text-xs font-semibold text-gray-500 block mb-1">รายการ</label>
                             <input
                                 type="text"
@@ -429,10 +446,11 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                         <div className="space-y-2 mb-4">
                             {[
                                 { label: 'วันที่', value: fmtShort(selectedTx.date) },
-                                { label: 'ที่เอกสาร', value: selectedTx.docNo || '-' },
+                                { label: 'รหัสเอกสาร', value: selectedTx.docNo || '-' },
                                 { label: 'รายการ', value: selectedTx.description },
                                 { label: 'หมวดหมู่', value: FUND_TYPE_OPTIONS.find(o => o.value === selectedTx.fundType)?.group || '-' },
                                 { label: 'ประเภท', value: FUND_TYPE_OPTIONS.find(o => o.value === selectedTx.fundType)?.label || selectedTx.fundType },
+                                { label: 'บัญชีธนาคาร', value: schoolSettings.bankAccounts?.find(b => b.id === selectedTx.bankId)?.name || '-' },
                                 { label: selectedTx.income > 0 ? 'จำนวนรับ' : 'จำนวนจ่าย', value: `฿${fmtMoney(selectedTx.income > 0 ? selectedTx.income : selectedTx.expense)}` },
                                 { label: 'ชื่อหัวรายการ', value: (selectedTx.payer || selectedTx.payee || '-') },
                             ].map((item, i) => (

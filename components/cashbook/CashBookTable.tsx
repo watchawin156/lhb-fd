@@ -1,6 +1,7 @@
 import React from 'react';
 import { FUND_TYPE_OPTIONS } from '../../utils';
 import { fmtShort, fmtMoney } from './utils';
+import { useSchoolData } from '../../context/SchoolContext';
 
 interface CashBookTableProps {
     fyBE: number;
@@ -31,6 +32,8 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
     totalPayYear,
     yodYokPaiEnd
 }) => {
+    const { schoolSettings } = useSchoolData();
+
     return (
         <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
             <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 shrink-0">
@@ -71,6 +74,7 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                             <th className="px-4 py-3 whitespace-nowrap min-w-[100px]">วันที่</th>
                             <th className="px-4 py-3 whitespace-nowrap">ที่เอกสาร</th>
                             <th className="px-4 py-3 min-w-[140px]">ประเภท</th>
+                            <th className="px-4 py-3 min-w-[140px]">บัญชีธนาคาร</th>
                             <th className="px-4 py-3 min-w-[180px]">รายการ</th>
                             <th className="px-4 py-3 text-right whitespace-nowrap text-green-600">รายรับ</th>
                             <th className="px-4 py-3 text-right whitespace-nowrap text-red-600">รายจ่าย</th>
@@ -79,7 +83,7 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                         <tr className="bg-blue-50/30 dark:bg-blue-900/10 font-medium">
-                            <td colSpan={4} className="px-4 py-3 text-slate-600 text-right">ยอดยกมา {cashBookFilter === 'all' ? '(ทุกประเภท)' : ''}</td>
+                            <td colSpan={5} className="px-4 py-3 text-slate-600 text-right">ยอดยกมา {cashBookFilter === 'all' ? '(ทุกประเภท)' : ''}</td>
                             <td className="px-4 py-3 text-right"></td>
                             <td className="px-4 py-3 text-right"></td>
                             <td className="px-4 py-3 text-right text-blue-700 font-bold">{fmtMoney(prevCashStart)}</td>
@@ -109,7 +113,7 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                             if (curTxs.length === 0) {
                                 return (
                                     <tr>
-                                        <td colSpan={7} className="px-4 py-8 text-center text-slate-400">ไม่มีรายการในปีงบประมาณนี้</td>
+                                        <td colSpan={8} className="px-4 py-8 text-center text-slate-400">ไม่มีรายการในปีงบประมาณนี้</td>
                                     </tr>
                                 );
                             }
@@ -156,6 +160,9 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                                                 {getFundLabel(tx.fundType)}
                                             </span>
                                         </td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-600">
+                                            {schoolSettings.bankAccounts?.find(b => b.id === tx.bankId)?.name || '-'}
+                                        </td>
                                         <td className="px-4 py-2">
                                             <div className="flex items-center gap-2">
                                                 {tx.docNo?.includes('LN-') && (
@@ -176,7 +183,7 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                         })()}
 
                         <tr className="font-bold border-t border-slate-200 sticky bottom-0 z-10 bg-white/95 backdrop-blur-sm shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-                            <td colSpan={4} className="px-4 py-4 text-right text-slate-700 bg-white">รวมรับ - จ่ายตลอดปีงบประมาณ</td>
+                            <td colSpan={5} className="px-4 py-4 text-right text-slate-700 bg-white">รวมรับ - จ่ายตลอดปีงบประมาณ</td>
                             <td className="px-4 py-4 text-right text-green-700 bg-green-50/30">{fmtMoney(totalRecYear.cash)}</td>
                             <td className="px-4 py-4 text-right text-red-700 bg-red-50/30">{fmtMoney(totalPayYear.cash)}</td>
                             <td className="px-4 py-4 text-right text-blue-700 bg-blue-50/30">{fmtMoney(yodYokPaiEnd)}</td>
