@@ -55,9 +55,66 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
     // Sub-items: description + amount (empty amount = header row)
     // โหมดกลุ่ม: แต่ละรายการมี fundType ของตัวเอง
-    interface SubItem { id: number; description: string; amount: string; fundType?: string; }
-    const createSubItem = (): SubItem => ({ id: Date.now() + Math.random(), description: '', amount: '', fundType: 'fund-subsidy' });
+    interface SubItem { id: number; description: string; amount: string; fundType?: string; bankId?: string; }
+    const createSubItem = (): SubItem => ({ id: Date.now() + Math.random(), description: '', amount: '', fundType: 'fund-subsidy', bankId: '' });
     const [subItems, setSubItems] = useState<SubItem[]>([createSubItem()]);
+
+    // --- Smart Auto-fill: Observe descriptions and suggest fund/bank ---
+    const [lastAutoFilledDesc, setLastAutoFilledDesc] = useState<string>('');
+    React.useEffect(() => {
+        if (!isOpen || isGroupMode || showBorrowMode) return;
+
+        // Use the first active subItem's description for single-mode auto-fill
+        const currentDesc = subItems[0]?.description?.trim();
+        if (!currentDesc || currentDesc.length < 3 || currentDesc === lastAutoFilledDesc) return;
+
+        // Debounce slightly by checking if typing paused (we just do a direct check here for simplicity, 
+        // real debounce would use a timeout, but since React state updates are fast enough, we just check exact match).
+        const timer = setTimeout(() => {
+            // Find past transactions with the EXACT same description
+            const matches = transactions.filter(t =>
+                t.description?.trim().toLowerCase() === currentDesc.toLowerCase() &&
+                ((addTransactionType === 'income' && (t.income || 0) > 0) ||
+                    (addTransactionType === 'expense' && (t.expense || 0) > 0))
+            );
+
+            if (matches.length > 0) {
+                // Count frequencies
+                const fundFreq: Record<string, number> = {};
+                const bankFreq: Record<string, number> = {};
+
+                matches.forEach(m => {
+                    if (m.fundType) fundFreq[m.fundType] = (fundFreq[m.fundType] || 0) + 1;
+                    if (m.bankId) bankFreq[m.bankId] = (bankFreq[m.bankId] || 0) + 1;
+                });
+
+                // Find most frequent
+                let bestFund = '';
+                let maxFundFreq = 0;
+                for (const [f, c] of Object.entries(fundFreq)) {
+                    if (c > maxFundFreq) { maxFundFreq = c; bestFund = f; }
+                }
+
+                let bestBank = '';
+                let maxBankFreq = 0;
+                for (const [b, c] of Object.entries(bankFreq)) {
+                    if (c > maxBankFreq) { maxBankFreq = c; bestBank = b; }
+                }
+
+                if (bestFund && bestFund !== addFundType) {
+                    setAddFundType(bestFund);
+                }
+                if (bestBank && bestBank !== addBankId) {
+                    setAddBankId(bestBank);
+                }
+
+                setLastAutoFilledDesc(currentDesc);
+            }
+        }, 500); // 500ms debounce
+
+        return () => clearTimeout(timer);
+    }, [isOpen, subItems[0]?.description, isGroupMode, showBorrowMode, transactions, addTransactionType, addFundType, addBankId, lastAutoFilledDesc]);
+    // -------------------------------------------------------------------
 
     // Payee info for expense
     const [addPayeeType, setAddPayeeType] = useState<'legal' | 'person' | null>(null);
