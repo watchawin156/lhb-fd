@@ -213,155 +213,163 @@ export const handleExportPDF = async (
 
     if (pageId === 'fund-state') {
         const isLandscape = false;
-        let sPage = pdfDoc.addPage(isLandscape ? [PH, PW] : [PW, PH]);
-        const W = isLandscape ? PH : PW;
-        const H = isLandscape ? PW : PH;
-        let sy = H - 36;
-
-        const dc = (t: string, yy: number, b = false, c = BLK) => {
-            const f = b ? fontBold : font;
-            const tw = f.widthOfTextAtSize(t, FS);
-            sPage.drawText(t, { x: (W - tw) / 2, y: yy, size: FS, font: f, color: c });
-        };
-
-        if (!isLandscape) {
-            dc('ทะเบียนคุมเงินนอกงบประมาณ', sy, true); sy -= 20;
-            dc(`เงินรายได้แผ่นดิน (ปีงบประมาณ ${fiscalYear})`, sy, true); sy -= 24;
-        } else {
-            sPage.drawText('กระดาษทำการหมายเลข 7', { x: W - mR - 120, y: sy, size: FS, font, color: BLK });
-            dc(`ทะเบียนคุมเงินรายได้แผ่นดิน ปีงบประมาณ ${fiscalYear}`, sy, true); sy -= 24;
-        }
 
         const targetFunds = ['fund-state'];
-
         const combinedTxs = transactions
             .filter(t => targetFunds.includes(t.fundType) && t.date >= exportStartDate && t.date <= exportEndDate)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        const bfTxs = transactions.filter(t => targetFunds.includes(t.fundType) && t.date < exportStartDate);
-        const bf = bfTxs.reduce((acc, t) => acc + (t.income || 0) - (t.expense || 0), 0);
+        const uniqueDates = Array.from(new Set(combinedTxs.map(t => t.date)));
+        if (uniqueDates.length === 0) uniqueDates.push(exportEndDate);
 
-        let runBal = bf;
+        for (const currentDate of uniqueDates) {
+            let sPage = pdfDoc.addPage(isLandscape ? [PH, PW] : [PW, PH]);
+            const W = isLandscape ? PH : PW;
+            const H = isLandscape ? PW : PH;
+            let sy = H - 36;
 
-        const cDate = 70, cDoc = 70, cAmt = 60, cType = 60;
-        let customCols: number[] = []; let customHdrs: string[] = [];
-        if (isLandscape) {
-            const cDesc = W - mL - mR - cDate - cDoc - (cType * 4) - cAmt;
-            customCols = [cDate, cDoc, cDesc, cType, cType, cType, cType, cAmt];
-            customHdrs = ['วันที่', 'ที่เอกสาร', 'รายการ', 'ดบ.อุดหนุน', 'ดบ.อาหารฯ', 'กสศ', 'พระราชทาน', 'รวม'];
-        } else {
-            const cDesc = W - mL - mR - cDate - cDoc - (cType * 2) - (cAmt * 3);
-            customCols = [cDate, cDoc, cDesc, cType, cType, cAmt, cAmt, cAmt];
-            customHdrs = ['วันที่', 'ที่เอกสาร', 'รายการ', 'เงินอุดหนุน', 'อาหารกลางวัน', 'รายรับ', 'รายจ่าย', 'คงเหลือ'];
-        }
-        const customAln = customCols.map((_, i) => (i < 2 ? 'c' : i === 2 ? 'l' : 'r'));
-
-        const dr = (yy: number, cells: string[], b = false) => {
-            const h = FS_TABLE + 6;
-            sPage.drawRectangle({ x: mL, y: yy - h, width: W - mL - mR, height: h, borderColor: BLK, borderWidth: 0.4 });
-            let cx = mL;
-            customCols.forEach((cw, i) => {
-                if (i > 0) sPage.drawLine({ start: { x: cx, y: yy }, end: { x: cx, y: yy - h }, thickness: 0.4, color: BLK });
-                let t = cells[i] || '';
+            const dc = (t: string, yy: number, b = false, c = BLK) => {
                 const f = b ? fontBold : font;
-                const PAD = 4;
-                while (t.length > 0 && f.widthOfTextAtSize(t, FS_TABLE) > cw - PAD * 2) t = t.slice(0, -1);
-                const tw = f.widthOfTextAtSize(t, FS_TABLE);
-                let xPos = cx + PAD;
-                if (customAln[i] === 'c') xPos = cx + (cw - tw) / 2;
-                if (customAln[i] === 'r') xPos = cx + cw - tw - PAD;
-                sPage.drawText(t, { x: xPos, y: yy - h + 5, size: FS_TABLE, font: f, color: BLK });
-                cx += cw;
-            });
-            return yy - h;
-        };
+                const tw = f.widthOfTextAtSize(t, FS);
+                sPage.drawText(t, { x: (W - tw) / 2, y: yy, size: FS, font: f, color: c });
+            };
 
-        const hHead = FS_TABLE + 6;
-        sPage.drawRectangle({ x: mL, y: sy - hHead * 2, width: W - mL - mR, height: hHead * 2, borderColor: BLK, borderWidth: 0.8 });
-        let cxH = mL;
-        customCols.forEach((cw, i) => {
-            if (i > 0) {
-                const isInsideMerged = isLandscape ? (i >= 4 && i <= 6) : (i === 4);
-                const lineTopY = isInsideMerged ? sy - hHead : sy;
-                sPage.drawLine({ start: { x: cxH, y: lineTopY }, end: { x: cxH, y: sy - hHead * 2 }, thickness: 0.6, color: BLK });
-            }
-            if (!isLandscape && i >= 3 && i <= 4) {
-                if (i === 3) {
-                    const th = 'ประเภทของบัญชี';
-                    const tw = fontBold.widthOfTextAtSize(th, FS_TABLE);
-                    sPage.drawText(th, { x: cxH + (cw * 2 - tw) / 2, y: sy - hHead + 5, size: FS_TABLE, font: fontBold, color: BLK });
-                    sPage.drawLine({ start: { x: cxH, y: sy - hHead }, end: { x: cxH + cw * 2, y: sy - hHead }, thickness: 0.6 });
-                }
-                const th2 = customHdrs[i];
-                const tw2 = fontBold.widthOfTextAtSize(th2, FS_TABLE);
-                sPage.drawText(th2, { x: cxH + (cw - tw2) / 2, y: sy - hHead * 2 + 5, size: FS_TABLE, font: fontBold, color: BLK });
-            } else if (isLandscape && i >= 3 && i <= 6) {
-                if (i === 3) {
-                    const th = 'ประเภทเงินรายได้แผ่นดิน';
-                    const tw = fontBold.widthOfTextAtSize(th, FS_TABLE);
-                    sPage.drawText(th, { x: cxH + (cw * 4 - tw) / 2, y: sy - hHead + 5, size: FS_TABLE, font: fontBold, color: BLK });
-                    sPage.drawLine({ start: { x: cxH, y: sy - hHead }, end: { x: cxH + cw * 4, y: sy - hHead }, thickness: 0.6 });
-                }
-                const th2 = customHdrs[i];
-                const tw2 = fontBold.widthOfTextAtSize(th2, FS_TABLE);
-                sPage.drawText(th2, { x: cxH + (cw - tw2) / 2, y: sy - hHead * 2 + 5, size: FS_TABLE, font: fontBold, color: BLK });
+            if (!isLandscape) {
+                dc('ทะเบียนคุมเงินนอกงบประมาณ', sy, true); sy -= 20;
+                dc(`เงินรายได้แผ่นดิน (ปีงบประมาณ ${fiscalYear})`, sy, true); sy -= 24;
             } else {
-                const th = customHdrs[i];
-                const tw = fontBold.widthOfTextAtSize(th, FS_TABLE);
-                sPage.drawText(th, { x: cxH + (cw - tw) / 2, y: sy - hHead - (hHead - FS_TABLE) / 2, size: FS_TABLE, font: fontBold, color: BLK });
+                sPage.drawText('กระดาษทำการหมายเลข 7', { x: W - mR - 120, y: sy, size: FS, font, color: BLK });
+                dc(`ทะเบียนคุมเงินรายได้แผ่นดิน ปีงบประมาณ ${fiscalYear}`, sy, true); sy -= 24;
             }
-            cxH += cw;
-        });
-        sy -= hHead * 2;
 
-        const fmtAmt = (n: number) => n === 0 ? '-' : n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+            const dayStartMs = new Date(currentDate).getTime();
+            const bfTxs = transactions.filter(t => targetFunds.includes(t.fundType) && new Date(t.date).getTime() < dayStartMs);
+            const bf = bfTxs.reduce((acc, t) => acc + (t.income || 0) - (t.expense || 0), 0);
 
-        sy = dr(sy, [fmtDate(exportStartDate), '', 'ยอดยกมา', '', '', '', '', fmtAmt(bf)], true);
+            let runBal = bf;
 
-        combinedTxs.forEach(t => {
-            if (sy < 100) {
-                sPage = pdfDoc.addPage(isLandscape ? [PH, PW] : [PW, PH]);
-                sy = (isLandscape ? PW : PH) - 36;
-                sy -= RH * 2;
-            }
-            const n = (t.income || 0) - (t.expense || 0);
-            runBal += n;
-
-            let row: string[] = [];
+            const cDate = 70, cDoc = 70, cAmt = 60, cType = 60;
+            let customCols: number[] = []; let customHdrs: string[] = [];
             if (isLandscape) {
-                row = [
-                    fmtDate(t.date), t.docNo || '', t.description || '',
-                    t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
-                    t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
-                    fmtAmt(runBal)
-                ];
+                const cDesc = W - mL - mR - cDate - cDoc - (cType * 4) - cAmt;
+                customCols = [cDate, cDoc, cDesc, cType, cType, cType, cType, cAmt];
+                customHdrs = ['วันที่', 'ที่เอกสาร', 'รายการ', 'ดบ.อุดหนุน', 'ดบ.อาหารฯ', 'กสศ', 'พระราชทาน', 'รวม'];
             } else {
-                row = [
-                    fmtDate(t.date), t.docNo || '', t.description || '',
-                    t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
-                    t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
-                    fmtAmt(t.income || 0), fmtAmt(t.expense || 0), fmtAmt(runBal)
-                ];
+                const cDesc = W - mL - mR - cDate - cDoc - (cType * 2) - (cAmt * 3);
+                customCols = [cDate, cDoc, cDesc, cType, cType, cAmt, cAmt, cAmt];
+                customHdrs = ['วันที่', 'ที่เอกสาร', 'รายการ', 'เงินอุดหนุน', 'อาหารกลางวัน', 'รายรับ', 'รายจ่าย', 'คงเหลือ'];
             }
-            sy = dr(sy, row);
-        });
+            const customAln = customCols.map((_, i) => (i < 2 ? 'c' : i === 2 ? 'l' : 'r'));
 
-        if (sy < 80) { sPage = pdfDoc.addPage(isLandscape ? [PH, PW] : [PW, PH]); sy = (isLandscape ? PW : PH) - 36; }
-        if (!isLandscape) sy = dr(sy, ['', '', 'ยอดยกไป', '', '', '', '', fmtAmt(runBal)], true);
+            const dr = (yy: number, cells: string[], b = false) => {
+                const h = FS_TABLE + 6;
+                sPage.drawRectangle({ x: mL, y: yy - h, width: W - mL - mR, height: h, borderColor: BLK, borderWidth: 0.4 });
+                let cx = mL;
+                customCols.forEach((cw, i) => {
+                    if (i > 0) sPage.drawLine({ start: { x: cx, y: yy }, end: { x: cx, y: yy - h }, thickness: 0.4, color: BLK });
+                    let t = cells[i] || '';
+                    const f = b ? fontBold : font;
+                    const PAD = 4;
+                    while (t.length > 0 && f.widthOfTextAtSize(t, FS_TABLE) > cw - PAD * 2) t = t.slice(0, -1);
+                    const tw = f.widthOfTextAtSize(t, FS_TABLE);
+                    let xPos = cx + PAD;
+                    if (customAln[i] === 'c') xPos = cx + (cw - tw) / 2;
+                    if (customAln[i] === 'r') xPos = cx + cw - tw - PAD;
+                    sPage.drawText(t, { x: xPos, y: yy - h + 5, size: FS_TABLE, font: f, color: BLK });
+                    cx += cw;
+                });
+                return yy - h;
+            };
 
-        sy -= 30;
-        const sigsArr = ['เจ้าหน้าที่บัญชี', 'ผู้ตรวจบัญชี', 'ผู้อำนวยการโรงเรียน'];
-        const DOTS = '........................................';
-        const roleWidthMax = font.widthOfTextAtSize('ผู้อำนวยการโรงเรียน', FS) + 10;
-        const sigStartX = W - mR - roleWidthMax - font.widthOfTextAtSize(DOTS, FS);
+            const hHead = FS_TABLE + 6;
+            sPage.drawRectangle({ x: mL, y: sy - hHead * 2, width: W - mL - mR, height: hHead * 2, borderColor: BLK, borderWidth: 0.8 });
+            let cxH = mL;
+            customCols.forEach((cw, i) => {
+                if (i > 0) {
+                    const isInsideMerged = isLandscape ? (i >= 4 && i <= 6) : (i === 4);
+                    const lineTopY = isInsideMerged ? sy - hHead : sy;
+                    sPage.drawLine({ start: { x: cxH, y: lineTopY }, end: { x: cxH, y: sy - hHead * 2 }, thickness: 0.6, color: BLK });
+                }
+                if (!isLandscape && i >= 3 && i <= 4) {
+                    if (i === 3) {
+                        const th = 'ประเภทของบัญชี';
+                        const tw = fontBold.widthOfTextAtSize(th, FS_TABLE);
+                        sPage.drawText(th, { x: cxH + (cw * 2 - tw) / 2, y: sy - hHead + 5, size: FS_TABLE, font: fontBold, color: BLK });
+                        sPage.drawLine({ start: { x: cxH, y: sy - hHead }, end: { x: cxH + cw * 2, y: sy - hHead }, thickness: 0.6 });
+                    }
+                    const th2 = customHdrs[i];
+                    const tw2 = fontBold.widthOfTextAtSize(th2, FS_TABLE);
+                    sPage.drawText(th2, { x: cxH + (cw - tw2) / 2, y: sy - hHead * 2 + 5, size: FS_TABLE, font: fontBold, color: BLK });
+                } else if (isLandscape && i >= 3 && i <= 6) {
+                    if (i === 3) {
+                        const th = 'ประเภทเงินรายได้แผ่นดิน';
+                        const tw = fontBold.widthOfTextAtSize(th, FS_TABLE);
+                        sPage.drawText(th, { x: cxH + (cw * 4 - tw) / 2, y: sy - hHead + 5, size: FS_TABLE, font: fontBold, color: BLK });
+                        sPage.drawLine({ start: { x: cxH, y: sy - hHead }, end: { x: cxH + cw * 4, y: sy - hHead }, thickness: 0.6 });
+                    }
+                    const th2 = customHdrs[i];
+                    const tw2 = fontBold.widthOfTextAtSize(th2, FS_TABLE);
+                    sPage.drawText(th2, { x: cxH + (cw - tw2) / 2, y: sy - hHead * 2 + 5, size: FS_TABLE, font: fontBold, color: BLK });
+                } else {
+                    const th = customHdrs[i];
+                    const tw = fontBold.widthOfTextAtSize(th, FS_TABLE);
+                    sPage.drawText(th, { x: cxH + (cw - tw) / 2, y: sy - hHead - (hHead - FS_TABLE) / 2, size: FS_TABLE, font: fontBold, color: BLK });
+                }
+                cxH += cw;
+            });
+            sy -= hHead * 2;
 
-        const dotW = font.widthOfTextAtSize(DOTS, FS);
+            const fmtAmt = (n: number) => n === 0 ? '-' : n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 
-        sigsArr.forEach((role) => {
-            sPage.drawText(DOTS, { x: sigStartX, y: sy, size: FS, font, color: BLK });
-            sPage.drawText(role, { x: sigStartX + dotW + 5, y: sy, size: FS, font, color: BLK });
-            sy -= 24;
-        });
+            sy = dr(sy, [fmtDate(currentDate), '', 'ยอดยกมา', '', '', '', '', fmtAmt(bf)], true);
+
+            const txsToday = combinedTxs.filter(t => t.date === currentDate);
+
+            txsToday.forEach(t => {
+                if (sy < 100) {
+                    sPage = pdfDoc.addPage(isLandscape ? [PH, PW] : [PW, PH]);
+                    sy = (isLandscape ? PW : PH) - 36;
+                    sy -= RH * 2;
+                }
+                const n = (t.income || 0) - (t.expense || 0);
+                runBal += n;
+
+                let row: string[] = [];
+                if (isLandscape) {
+                    row = [
+                        fmtDate(t.date), t.docNo || '', t.description || '',
+                        t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
+                        t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
+                        fmtAmt(runBal)
+                    ];
+                } else {
+                    row = [
+                        fmtDate(t.date), t.docNo || '', t.description || '',
+                        t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
+                        t.fundType === 'fund-state' ? fmtAmt(t.income || 0) : '',
+                        fmtAmt(t.income || 0), fmtAmt(t.expense || 0), fmtAmt(runBal)
+                    ];
+                }
+                sy = dr(sy, row);
+            });
+
+            if (sy < 80) { sPage = pdfDoc.addPage(isLandscape ? [PH, PW] : [PW, PH]); sy = (isLandscape ? PW : PH) - 36; }
+            if (!isLandscape) sy = dr(sy, ['', '', 'ยอดยกไป', '', '', '', '', fmtAmt(runBal)], true);
+
+            sy -= 30;
+            const sigsArr = ['เจ้าหน้าที่บัญชี', 'ผู้ตรวจบัญชี', 'ผู้อำนวยการโรงเรียน'];
+            const DOTS = '........................................';
+            const roleWidthMax = font.widthOfTextAtSize('ผู้อำนวยการโรงเรียน', FS) + 10;
+            const sigStartX = W - mR - roleWidthMax - font.widthOfTextAtSize(DOTS, FS);
+
+            const dotW = font.widthOfTextAtSize(DOTS, FS);
+
+            sigsArr.forEach((role) => {
+                sPage.drawText(DOTS, { x: sigStartX, y: sy, size: FS, font, color: BLK });
+                sPage.drawText(role, { x: sigStartX + dotW + 5, y: sy, size: FS, font, color: BLK });
+                sy -= 24;
+            });
+        }
 
         const bytes = await pdfDoc.save();
         window.open(URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' })), '_blank');
@@ -420,77 +428,102 @@ export const handleExportPDF = async (
         return yy - rH_table;
     };
 
-    let page = pdfDoc.addPage([PW, PH]);
-    let y = PH - 36;
+    const sortedTxsForDates = [...periodTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const uniqueDates = Array.from(new Set(sortedTxsForDates.map(t => t.date)));
+    if (uniqueDates.length === 0) {
+        uniqueDates.push(exportEndDate); // fallback if no txs
+    }
 
-    const t1 = 'ทะเบียนคุมเงินนอกงบประมาณ';
-    drawText(page, t1, (PW - fontBold.widthOfTextAtSize(t1, FS)) / 2, y, { bold: true });
-    y -= FS + 4;
-    const t2 = `ประเภท ${cleanTitle} (ปีงบประมาณ ${fiscalYear})`;
-    drawText(page, t2, (PW - font.widthOfTextAtSize(t2, FS)) / 2, y, { bold: false });
-    y -= FS + 8;
+    let isFirstDay = true;
 
-    y = drawHeader(page, y);
+    for (const currentDate of uniqueDates) {
+        if (!isFirstDay) {
+            // New page for each distinct day
+            // (Page is added automatically in the loop start. We just don't add one BEFORE the very first day)
+        }
 
-    const sortedTxs = [...periodTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        let page = pdfDoc.addPage([PW, PH]);
+        let y = PH - 36;
 
-    const fmtAmt = (n: number | null | undefined) => {
-        if (n == null || n === 0) return '-';
-        return n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    };
-    const SUM_ALN: ('l' | 'c' | 'r')[] = ['c', 'c', 'r', 'r', 'r', 'r'];
+        const t1 = 'ทะเบียนคุมเงินนอกงบประมาณ';
+        drawText(page, t1, (PW - fontBold.widthOfTextAtSize(t1, FS)) / 2, y, { bold: true });
+        y -= FS + 4;
+        const t2 = `ประเภท ${cleanTitle} (ปีงบประมาณ ${fiscalYear})`;
+        drawText(page, t2, (PW - font.widthOfTextAtSize(t2, FS)) / 2, y, { bold: false });
+        y -= FS + 8;
 
-    let runBal = broughtForward;
-    y = drawRow(page, y,
-        [fmtDate(exportStartDate), '', 'ยอดยกมา', fmtAmt(broughtForward), '-', fmtAmt(broughtForward)],
-        true, SUM_ALN
-    );
+        y = drawHeader(page, y);
 
-    for (const t of sortedTxs) {
+        // Compute balances for THIS day
+        const dayStartMs = new Date(currentDate).getTime();
+        const prevTxs = transactions.filter(t => t.fundType === pageId && new Date(t.date).getTime() < dayStartMs);
+        const dayBroughtForward = prevTxs.reduce((acc, t) => acc + (t.income || 0) - (t.expense || 0), 0);
+
+        const txsToday = periodTransactions.filter(t => t.date === currentDate);
+        const dayIncome = txsToday.reduce((acc, t) => acc + (t.income || 0), 0);
+        const dayExpense = txsToday.reduce((acc, t) => acc + (t.expense || 0), 0);
+        const dayCarriedForward = dayBroughtForward + dayIncome - dayExpense;
+
+        const fmtAmt = (n: number | null | undefined) => {
+            if (n == null || n === 0) return '-';
+            return n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+        const SUM_ALN: ('l' | 'c' | 'r')[] = ['c', 'c', 'r', 'r', 'r', 'r'];
+
+        let runBal = dayBroughtForward;
+        y = drawRow(page, y,
+            [fmtDate(currentDate), '', 'ยอดยกมา', fmtAmt(dayBroughtForward), '-', fmtAmt(dayBroughtForward)],
+            true, SUM_ALN
+        );
+
+        for (const t of txsToday) {
+            if (y < 120) {
+                page = pdfDoc.addPage([PW, PH]);
+                y = PH - 36;
+                y = drawHeader(page, y);
+            }
+            runBal += (t.income || 0) - (t.expense || 0);
+            y = drawRow(page, y, [
+                fmtDate(t.date),
+                t.docNo || '',
+                t.description || '',
+                t.income > 0 ? fmtAmt(t.income) : '-',
+                t.expense > 0 ? fmtAmt(t.expense) : '-',
+                fmtAmt(runBal),
+            ]);
+        }
+
         if (y < 120) {
             page = pdfDoc.addPage([PW, PH]);
             y = PH - 36;
             y = drawHeader(page, y);
         }
-        runBal += (t.income || 0) - (t.expense || 0);
-        y = drawRow(page, y, [
-            fmtDate(t.date),
-            t.docNo || '',
-            t.description || '',
-            t.income > 0 ? fmtAmt(t.income) : '-',
-            t.expense > 0 ? fmtAmt(t.expense) : '-',
-            fmtAmt(runBal),
-        ]);
-    }
 
-    if (y < 120) {
-        page = pdfDoc.addPage([PW, PH]);
-        y = PH - 36;
-        y = drawHeader(page, y);
-    }
+        y = drawRow(page, y,
+            ['', '', 'รวมรับ-จ่าย', fmtAmt(dayIncome), fmtAmt(dayExpense), '-'],
+            true, SUM_ALN
+        );
+        y = drawRow(page, y,
+            ['', '', 'ยอดยกไป', '-', '-', fmtAmt(dayCarriedForward)],
+            true, SUM_ALN
+        );
+        y = drawRow(page, y, ['', '', '', '', '', '']);
 
-    y = drawRow(page, y,
-        ['', '', 'รวมรับ-จ่าย', fmtAmt(totalIncome), fmtAmt(totalExpense), '-'],
-        true, SUM_ALN
-    );
-    y = drawRow(page, y,
-        ['', '', 'ยอดยกไป', '-', '-', fmtAmt(carriedForward)],
-        true, SUM_ALN
-    );
-    y = drawRow(page, y, ['', '', '', '', '', '']);
-
-    y -= 24;
-    const sigs = ['เจ้าหน้าที่บัญชี', 'ผู้ตรวจบัญชี', 'ผู้อำนวยการโรงเรียน'];
-    const DOTS = '........................................';
-    const roleWidthMax = font.widthOfTextAtSize('ผู้อำนวยการโรงเรียน', FS) + 10;
-    const sigStartX = PW - mR - roleWidthMax - font.widthOfTextAtSize(DOTS, FS);
-    const dotW = font.widthOfTextAtSize(DOTS, FS);
-
-    sigs.forEach((role) => {
-        page.drawText(DOTS, { x: sigStartX, y, size: FS, font, color: BLK });
-        page.drawText(role, { x: sigStartX + dotW + 5, y, size: FS, font, color: BLK });
         y -= 24;
-    });
+        const sigs = ['เจ้าหน้าที่บัญชี', 'ผู้ตรวจบัญชี', 'ผู้อำนวยการโรงเรียน'];
+        const DOTS = '........................................';
+        const roleWidthMax = font.widthOfTextAtSize('ผู้อำนวยการโรงเรียน', FS) + 10;
+        const sigStartX = PW - mR - roleWidthMax - font.widthOfTextAtSize(DOTS, FS);
+        const dotW = font.widthOfTextAtSize(DOTS, FS);
+
+        sigs.forEach((role) => {
+            page.drawText(DOTS, { x: sigStartX, y, size: FS, font, color: BLK });
+            page.drawText(role, { x: sigStartX + dotW + 5, y, size: FS, font, color: BLK });
+            y -= 24;
+        });
+
+        isFirstDay = false;
+    }
 
     const bytes = await pdfDoc.save();
     const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });

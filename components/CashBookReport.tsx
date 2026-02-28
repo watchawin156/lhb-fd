@@ -7,8 +7,10 @@ import CashBookAddModal from './cashbook/CashBookAddModal';
 import CashBookCarryForwardModal from './cashbook/CashBookCarryForwardModal';
 import CashBookCheckModal from './cashbook/CashBookCheckModal';
 import CashBookDetailModal from './cashbook/CashBookDetailModal';
+import CashBookReturnModal from './cashbook/CashBookReturnModal';
 import ThaiDatePicker from './ThaiDatePicker';
 import { FUND_TYPE_OPTIONS } from '../utils';
+import { buildLoanDocPDF } from './loanPdfBuilder';
 
 const THAI_MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
@@ -59,7 +61,7 @@ interface CashBookReportProps {
 }
 
 const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) => {
-    const { transactions, addTransaction, editTransaction, deleteTransaction, schoolSettings } = useSchoolData();
+    const { transactions, loans, addTransaction, editTransaction, deleteTransaction, schoolSettings } = useSchoolData();
     const [loading, setLoading] = useState(false);
     const [isDailyReportOpen, setIsDailyReportOpen] = useState(false);
     const [isDailyDatePickerOpen, setIsDailyDatePickerOpen] = useState(false);
@@ -88,6 +90,9 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
     const [carryForwardItems, setCarryForwardItems] = useState<{ fundType: string; label: string; balance: number }[]>([]);
     const [isManualMode, setIsManualMode] = useState(false);
     const [isViewMode, setIsViewMode] = useState(false); // ดูรายการที่ยกครบแล้ว
+
+    // Return Modal
+    const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
 
     // Cash Book fund filter
     const [cashBookFilter, setCashBookFilter] = useState<string>('all');
@@ -499,6 +504,11 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                             <span className="material-symbols-outlined text-base">remove</span>
                             เพิ่มรายจ่าย
                         </button>
+                        <button onClick={() => setIsReturnModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold shadow-md shadow-orange-500/30 transition-all">
+                            <span className="material-symbols-outlined text-base">keyboard_return</span>
+                            คืนเงิน
+                        </button>
 
                         {/* Bank Accounts Dropdown */}
                         <div className="relative group/bank z-30">
@@ -639,6 +649,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                             <tr>
                                 <th className="px-4 py-3 whitespace-nowrap min-w-[100px]">วันที่</th>
                                 <th className="px-4 py-3 whitespace-nowrap">ที่เอกสาร</th>
+                                <th className="px-4 py-3 text-center whitespace-nowrap">ไฟล์แนบ</th>
                                 <th className="px-4 py-3 min-w-[140px]">ประเภท</th>
                                 <th className="px-4 py-3 min-w-[180px]">รายการ</th>
                                 <th className="px-4 py-3 text-right whitespace-nowrap text-green-600">รายรับ</th>
@@ -650,7 +661,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                             {/* แสดงยอดยกมาจากปีงบประมาณที่แล้วถ้ามี */}
                             {prevCashStart !== 0 && (
                                 <tr className="font-medium text-amber-800 bg-amber-50/50">
-                                    <td className="px-4 py-2 text-center" colSpan={6}>
+                                    <td className="px-4 py-2 text-center" colSpan={7}>
                                         ยอดยกมาจากปีงบประมาณ {fyBE - 1}
                                     </td>
                                     <td className="px-4 py-2 text-right font-bold">{fmtMoney(prevCashStart)}</td>
@@ -694,7 +705,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                                 if (curTxs.length === 0) {
                                     return (
                                         <tr>
-                                            <td colSpan={7} className="px-4 py-8 text-center text-slate-400">ไม่มีรายการในปีงบประมาณนี้</td>
+                                            <td colSpan={8} className="px-4 py-8 text-center text-slate-400">ไม่มีรายการในปีงบประมาณนี้</td>
                                         </tr>
                                     );
                                 }
@@ -746,6 +757,36 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                                             className="hover:bg-blue-50/50 dark:hover:bg-gray-800/30 cursor-pointer transition-colors">
                                             <td className="px-4 py-2 whitespace-nowrap">{fmtShort(tx.date)}</td>
                                             <td className="px-4 py-2 font-mono text-xs">{tx.docNo || '-'}</td>
+                                            {(() => {
+                                                const relatedLoan = tx.loanId ? loans.find((l: any) => l.id === tx.loanId) : null;
+                                                const isReturnPhase = tx.docNo && String(tx.docNo).startsWith('คืน-');
+                                                if (!relatedLoan) return <td className="px-4 py-2"></td>;
+
+                                                const handleViewDoc = async (e: React.MouseEvent) => {
+                                                    e.stopPropagation();
+                                                    try {
+                                                        const bytes = await buildLoanDocPDF(relatedLoan, !!isReturnPhase, schoolSettings, tx.date);
+                                                        const blob = new Blob([bytes as any], { type: 'application/pdf' });
+                                                        window.open(URL.createObjectURL(blob), '_blank');
+                                                    } catch (err) {
+                                                        alert('เกิดข้อผิดพลาดในการสร้าง PDF ไฟล์แนบ');
+                                                    }
+                                                };
+
+                                                const showBorrowDoc = !isReturnPhase && ((tx.income || 0) > 0);
+                                                const showReturnDoc = !!isReturnPhase && ((tx.expense || 0) > 0);
+
+                                                if (showBorrowDoc || showReturnDoc) {
+                                                    return (
+                                                        <td className="px-4 py-2 text-center">
+                                                            <button onClick={handleViewDoc} className={`transition-colors ${showBorrowDoc ? 'text-orange-500 hover:text-orange-600' : 'text-green-500 hover:text-green-600'}`} title={showBorrowDoc ? "เอกสารยืมเงิน" : "เอกสารคืนเงิน"}>
+                                                                <span className="material-symbols-outlined text-lg">picture_as_pdf</span>
+                                                            </button>
+                                                        </td>
+                                                    );
+                                                }
+                                                return <td className="px-4 py-2"></td>;
+                                            })()}
                                             <td className="px-4 py-2">
                                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${getFundBadgeColor(tx.fundType)}`}>
                                                     {getFundLabel(tx.fundType)}
@@ -761,7 +802,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                             })()}
 
                             <tr className="font-bold border-t border-slate-200 sticky bottom-0 z-10 bg-white/95 backdrop-blur-sm shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-                                <td colSpan={4} className="px-4 py-4 text-right text-slate-700 bg-white">รวมรับ - จ่ายตลอดปีงบประมาณ</td>
+                                <td colSpan={5} className="px-4 py-4 text-right text-slate-700 bg-white">รวมรับ - จ่ายตลอดปีงบประมาณ</td>
                                 <td className="px-4 py-4 text-right text-green-700 bg-green-50/30">{fmtMoney(totalRecYear.cash)}</td>
                                 <td className="px-4 py-4 text-right text-red-700 bg-red-50/30">{fmtMoney(totalPayYear.cash)}</td>
                                 <td className="px-4 py-4 text-right text-blue-700 bg-blue-50/30">{fmtMoney(yodYokPaiEnd)}</td>
@@ -981,6 +1022,12 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                     </div>
                 </div>
             )}
+
+            {/* Return Modal */}
+            <CashBookReturnModal
+                isOpen={isReturnModalOpen}
+                onClose={() => setIsReturnModalOpen(false)}
+            />
 
         </div>
     );

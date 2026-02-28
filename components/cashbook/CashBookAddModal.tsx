@@ -17,7 +17,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
     const [addTransactionType, setAddTransactionType] = useState<'income' | 'expense'>(initialTransactionType);
     const [isGroupMode, setIsGroupMode] = useState(false);
-    
+
     // Borrow Mode - ยืมเงิน within the modal
     const [showBorrowMode, setShowBorrowMode] = useState(false);
     const [borrowFromFund, setBorrowFromFund] = useState('');
@@ -177,12 +177,12 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             alert('กรุณาเลือกกองทุนต้นทาง');
             return;
         }
-        
+
         if (!borrowAmountNum || borrowAmountNum <= 0) {
             alert('กรุณากรอกจำนวนเงิน');
             return;
         }
-        
+
         if (!borrowPurpose) {
             alert('กรุณากรอกวัตถุประสงค์การยืม');
             return;
@@ -206,7 +206,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
         try {
             setIsGeneratingPDF(true);
-            
+
             // Add loan to context
             addLoan(newLoan);
 
@@ -225,7 +225,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
             // Generate PDF as blob
             const pdfBytes = await buildLoanDocPDF(newLoan, false, schoolSettings, today);
-            const blob = new Blob([pdfBytes as unknown as Uint8Array], { type: 'application/pdf' });
+            const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
             const url = URL.createObjectURL(blob);
             setPdfBlobUrl(url);
             setBorrowSubmitted(true);
@@ -244,7 +244,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             a.href = pdfBlobUrl;
             a.download = `loan-${new Date().toISOString().slice(0, 10)}.pdf`;
             a.click();
-            
+
             // Reset borrow mode
             setBorrowAmount('');
             setBorrowPurpose('');
@@ -344,7 +344,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                         .filter((t: any) => t.fundType === 'fund-tax' && t.date <= addDate)
                         .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                     if (amt > fundBalance) {
-                        
+
                     }
                     addTransaction({
                         id: Date.now(),
@@ -371,7 +371,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                         .filter((t: any) => t.fundType === 'fund-tax' && t.date <= addDate)
                         .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                     if (selectedTx.income > fundBalance) {
-                        
+
                     }
                     addTransaction({
                         id: Date.now(),
@@ -429,7 +429,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 .filter((t: any) => t.fundType === 'fund-poor' && t.date <= addDate)
                 .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
             if (amt > fundBalance) {
-                
+
             }
             const baseDesc = selectedTx.description || 'เงินปัจจัยพื้นฐานนักเรียนยากจน';
             const cleanDesc = extractFundName(baseDesc);
@@ -485,7 +485,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 .filter((t: any) => t.fundType === 'fund-eef' && t.date <= addDate)
                 .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
             if (amt > fundBalance) {
-                
+
             }
             const baseDesc = selectedTx.description || 'เงิน กสศ.';
             const cleanDesc = extractFundName(baseDesc);
@@ -531,7 +531,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     .filter((t: any) => t.fundType === 'fund-state' && t.date <= addDate)
                     .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                 if (amt > fundBalance) {
-                    
+
                 }
                 addTransaction({
                     id: Date.now(),
@@ -543,6 +543,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     expense: amt,
                     payer: '',
                     payee: stateManualDesc,
+                    bankId: addBankId || undefined,
                 });
             } else {
                 if (!selectedStateIncomeId) {
@@ -563,7 +564,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     .filter((t: any) => t.fundType === 'fund-state' && t.date <= addDate)
                     .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
                 if (amt > fundBalance) {
-                    
+
                 }
                 addTransaction({
                     id: Date.now(),
@@ -576,6 +577,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     payer: '',
                     payee: selectedTx.description || selectedTx.payer || '',
                     incomeRefId: selectedTx.id,
+                    bankId: selectedTx.bankId || undefined,
                 });
             }
 
@@ -623,25 +625,29 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 .filter((t: any) => t.fundType === addFundType && t.date <= addDate)
                 .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
             if (subTotal > fundBalance) {
-                    
+
             }
-        for (let idx = 0; idx < dataItems.length; idx++) {
-            const s = dataItems[idx];
-            const amt = parseFloat(s.amount);
-            addTransaction({
-                id: Date.now() + idx,
-                date: addDate,
-                docNo: addDocNo,
-                description: s.description,
-                fundType: addFundType,
-                income: 0,
-                expense: amt,
-                payer: '',
-                payee: headerTitle,
-                recipientType: addPayeeType === 'legal' ? 'juristic' : 'individual',
-                bankId: isInterestMode ? addBankId : undefined,
-            });
-        }
+            if (addFundType === 'fund-state' && !addBankId) {
+                alert('กรุณาเลือกบัญชีธนาคารที่จ่ายเงิน (เนื่องจากเป็นรายการเงินรายได้แผ่นดิน)');
+                return;
+            }
+            for (let idx = 0; idx < dataItems.length; idx++) {
+                const s = dataItems[idx];
+                const amt = parseFloat(s.amount);
+                addTransaction({
+                    id: Date.now() + idx,
+                    date: addDate,
+                    docNo: addDocNo,
+                    description: s.description,
+                    fundType: addFundType,
+                    income: 0,
+                    expense: amt,
+                    payer: '',
+                    payee: headerTitle,
+                    recipientType: addPayeeType === 'legal' ? 'juristic' : 'individual',
+                    bankId: addBankId || undefined,
+                });
+            }
         }
 
         onClose();
@@ -687,9 +693,9 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                     <span className="mx-1 text-gray-200">|</span>
                                 </>
                             ) : null}
-                            
+
                             {/* Borrow Toggle Button */}
-                            <button type="button" 
+                            <button type="button"
                                 onClick={() => {
                                     if (showBorrowMode) {
                                         setShowBorrowMode(false);
@@ -702,11 +708,10 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                         setShowBorrowMode(true);
                                     }
                                 }}
-                                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                                    showBorrowMode 
-                                        ? 'bg-orange-500 text-white' 
-                                        : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                                }`}>
+                                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${showBorrowMode
+                                    ? 'bg-orange-500 text-white'
+                                    : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                    }`}>
                                 <span className="material-symbols-outlined text-sm">currency_exchange</span>
                                 {showBorrowMode ? 'ยืมเงิน' : 'ยืม'}
                             </button>
@@ -717,20 +722,20 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     </div>
                     {/* Expense Type Toggle */}
                     {!showBorrowMode && (
-                    <div className="flex gap-2 mt-2">
-                        <button type="button" onClick={() => setAddTransactionType('income')}
-                            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border-2 flex items-center justify-center gap-1 ${addTransactionType === 'income'
-                                ? 'bg-green-500 border-green-500 text-white shadow-sm'
-                                : 'bg-white border-gray-200 text-gray-400 hover:border-green-300'}`}>
-                            <span className="material-symbols-outlined text-base">arrow_downward</span> รายรับ
-                        </button>
-                        <button type="button" onClick={() => setAddTransactionType('expense')}
-                            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border-2 flex items-center justify-center gap-1 ${addTransactionType === 'expense'
-                                ? 'bg-red-500 border-red-500 text-white shadow-sm'
-                                : 'bg-white border-gray-200 text-gray-400 hover:border-red-300'}`}>
-                            <span className="material-symbols-outlined text-base">arrow_upward</span> รายจ่าย
-                        </button>
-                    </div>
+                        <div className="flex gap-2 mt-2">
+                            <button type="button" onClick={() => setAddTransactionType('income')}
+                                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border-2 flex items-center justify-center gap-1 ${addTransactionType === 'income'
+                                    ? 'bg-green-500 border-green-500 text-white shadow-sm'
+                                    : 'bg-white border-gray-200 text-gray-400 hover:border-green-300'}`}>
+                                <span className="material-symbols-outlined text-base">arrow_downward</span> รายรับ
+                            </button>
+                            <button type="button" onClick={() => setAddTransactionType('expense')}
+                                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border-2 flex items-center justify-center gap-1 ${addTransactionType === 'expense'
+                                    ? 'bg-red-500 border-red-500 text-white shadow-sm'
+                                    : 'bg-white border-gray-200 text-gray-400 hover:border-red-300'}`}>
+                                <span className="material-symbols-outlined text-base">arrow_upward</span> รายจ่าย
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -810,7 +815,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                             </div>
                         </div>
                     )}
-                    
+
                     {/* Shared fields */}
                     {/* Shared fields */}
                     <div className="space-y-4 mb-4">
@@ -891,14 +896,16 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                     placeholder="กค 68/001" />
                             </div>
                         </div>
-                        {addTransactionType === 'income' && addFundType === 'fund-state' && (
+                        {((addTransactionType === 'income' && addFundType === 'fund-state') || (addTransactionType === 'expense' && addFundType === 'fund-state' && isStateManualMode)) && (
                             <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 animate-fade-in mt-4">
                                 <label className="text-sm font-semibold text-blue-800 mb-1 block">เงินรายได้แผ่นดิน(ดอกเบี้ย) — เลือกบัญชีธนาคาร</label>
-                                <p className="text-xs text-blue-600 mb-3 opacity-80">โปรดระบุบัญชีธนาคารที่รับดอกเบี้ยมา</p>
+                                <p className="text-xs text-blue-600 mb-3 opacity-80">โปรดระบุบัญชีธนาคารเป้าหมาย</p>
                                 <select value={addBankId} onChange={e => setAddBankId(e.target.value)}
                                     className="w-full px-4 py-3 rounded-xl border border-blue-200 bg-white text-base outline-none focus:border-blue-400 transition-colors">
                                     <option value="">-- กรุณาเลือกบัญชีธนาคาร --</option>
-                                    {(schoolSettings.bankAccounts || []).map(acc => (
+                                    {(schoolSettings.bankAccounts || []).filter(acc =>
+                                        acc.fundTypes.includes('fund-subsidy') || acc.fundTypes.includes('fund-lunch') || acc.fundTypes.includes('fund-eef') || acc.fundTypes.includes('fund-safekeeping') || acc.fundTypes.length === 0
+                                    ).map(acc => (
                                         <option key={acc.id} value={acc.id}>{acc.name} ({acc.bankName} {acc.accountNo})</option>
                                     ))}
                                 </select>
