@@ -11,3 +11,13 @@ export const fmtShort = (dateStr: string) => {
 
 export const fmtMoney = (n: number) =>
     n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export const fmtBankShort = (name: string) => {
+    if (!name) return '-';
+    return name
+        .replace(/^บัญชีเงิน/, 'บช.เงิน')
+        .replace(/^บัญชี/, 'บช.')
+        .replace(/เพื่อการศึกษา/, '')
+        .replace(/โครงการ/, '')
+        .trim();
+};
