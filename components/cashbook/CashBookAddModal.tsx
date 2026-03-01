@@ -4,6 +4,7 @@ import { FUND_TYPE_OPTIONS } from '../../utils';
 import ThaiDatePicker from '../ThaiDatePicker';
 import { fmtShort, fmtMoney } from './utils';
 import { buildLoanDocPDF } from '../loanPdfBuilder';
+import BankDetailModal from './BankDetailModal';
 
 interface CashBookAddModalProps {
     isOpen: boolean;
@@ -28,6 +29,24 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     const [borrowSubmitted, setBorrowSubmitted] = useState(false);
     const [selectedBankId, setSelectedBankId] = useState('');
 
+    // Project & Category state
+    const [addProjectId, setAddProjectId] = useState<string>('');
+    const [projects, setProjects] = useState<any[]>([]);
+    const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+    const [bankToManageId, setBankToManageId] = useState<string | null>(null);
+
+    // Load projects from localStorage
+    React.useEffect(() => {
+        const saved = localStorage.getItem('school-projects-v2');
+        if (saved) {
+            try {
+                setProjects(JSON.parse(saved));
+            } catch (e) {
+                console.error("Failed to parse projects", e);
+            }
+        }
+    }, [isOpen]);
+
     // Shared header fields
     const [addDate, setAddDate] = useState(new Date().toISOString().slice(0, 10));
     const [addFundType, setAddFundType] = useState('fund-subsidy');
@@ -35,6 +54,34 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     const [isFundDropdownOpen, setIsFundDropdownOpen] = useState(false);
     const [addDocNo, setAddDocNo] = useState('');
     const [addBankId, setAddBankId] = useState<string>('');
+
+    // --- Project/Fund/Bank Macro Automation ---
+    React.useEffect(() => {
+        if (!isOpen || isGroupMode || showBorrowMode) return;
+
+        // Rule: If fund-state-subsidy-interest is selected
+        if (addFundType === 'fund-state-subsidy-interest') {
+            const desc = 'รับเงินดอกเบี้ยเงินอุดหนุน';
+            if (!subItems[0]?.description || subItems[0].description.includes('ดอกเบี้ย')) {
+                updateSub(subItems[0].id, 'description', desc);
+            }
+            const bank = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อุดหนุน') || b.fundTypes.includes('fund-subsidy'));
+            if (bank && addBankId !== bank.id) {
+                setAddBankId(bank.id);
+            }
+        }
+        // Rule: If fund-state-lunch-interest is selected
+        else if (addFundType === 'fund-state-lunch-interest') {
+            const desc = 'รับเงินดอกเบี้ยอาหารกลางวัน';
+            if (!subItems[0]?.description || subItems[0].description.includes('ดอกเบี้ย')) {
+                updateSub(subItems[0].id, 'description', desc);
+            }
+            const bank = schoolSettings.bankAccounts?.find((b: any) => b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch'));
+            if (bank && addBankId !== bank.id) {
+                setAddBankId(bank.id);
+            }
+        }
+    }, [addFundType, isOpen, isGroupMode, showBorrowMode]);
 
     // --- Inject Auto Doc Number Effect ---
     React.useEffect(() => {
@@ -754,7 +801,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 payer: addTransactionType === 'income' ? headerTitle : '',
                 payee: addTransactionType === 'expense' ? headerTitle : '',
                 recipientType: addTransactionType === 'expense' ? (addPayeeType === 'legal' ? 'juristic' : 'individual') : undefined,
-                bankId: finalBankId,
+                bankId: finalBankId || (addBankId !== '' ? addBankId : undefined),
             });
         }
 
@@ -914,6 +961,63 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                 </div>
                             </div>
                         )}
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label className="text-sm font-medium text-gray-500 mb-1 block">โครงการ / กิจกรรม</label>
+                                <select
+                                    value={addProjectId}
+                                    onChange={e => {
+                                        setAddProjectId(e.target.value);
+                                        const p = projects.find(proj => String(proj.id) === e.target.value);
+                                        if (p && !subItems[0].description) {
+                                            updateSub(subItems[0].id, 'description', p.name);
+                                        }
+                                    }}
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-base outline-none focus:border-gray-400 transition-colors"
+                                >
+                                    <option value="">-- เลือกโครงการ (ถ้ามี) --</option>
+                                    {projects.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-500 mb-1 block">
+                                    บัญชีธนาคาร
+                                    {addBankId && addBankId !== 'cash' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setBankToManageId(addBankId);
+                                                setIsBankModalOpen(true);
+                                            }}
+                                            className="ml-2 inline-flex items-center gap-0.5 text-[10px] text-blue-500 hover:text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-[12px]">account_balance_wallet</span>
+                                            จัดการบัญชีนี้
+                                        </button>
+                                    )}
+                                </label>
+                                <select value={addBankId} onChange={e => setAddBankId(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-base outline-none focus:border-gray-400 transition-colors">
+                                    <option value="">-- เลือกบัญชี --</option>
+                                    {(schoolSettings.bankAccounts || []).map(acc => {
+                                        // Shorten name logic
+                                        let shortName = acc.name.split(' (')[0];
+                                        if (shortName.includes('กสศ')) shortName = 'บช.กสศ';
+                                        else if (shortName.includes('อุดหนุน')) shortName = 'บช.เงินอุดหนุน';
+                                        else if (shortName.includes('อาหารกลางวัน')) shortName = 'บช.อาหารกลางวัน';
+                                        else if (shortName.includes('รายได้สถานศึกษา')) shortName = 'บช.รายได้สถานศึกษา';
+
+                                        return (
+                                            <option key={acc.id} value={acc.id}>{shortName} ({acc.bankName})</option>
+                                        );
+                                    })}
+                                    <option value="cash">บช.เงินสด</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4 mt-4">
                             <div>
                                 <label className="text-sm font-medium text-gray-500 mb-1 block">วัน/เดือน/ปี</label>
@@ -1629,6 +1733,15 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     </button>
                 </div>
             </form >
+
+            {/* Bank Detail Sub-Modal */}
+            <BankDetailModal
+                isOpen={isBankModalOpen}
+                onClose={() => setIsBankModalOpen(false)}
+                bankId={bankToManageId}
+                schoolSettings={schoolSettings}
+                transactions={transactions}
+            />
         </div >
     );
 };
