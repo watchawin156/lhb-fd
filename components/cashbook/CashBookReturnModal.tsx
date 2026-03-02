@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useSchoolData } from '../../context/SchoolContext';
 import { LoanContract } from '../../types';
 import { fmtShort, fmtMoney } from './utils';
+import ConfirmModal from '../ConfirmModal';
 
 interface CashBookReturnModalProps {
     isOpen: boolean;
@@ -13,6 +14,24 @@ const CashBookReturnModal: React.FC<CashBookReturnModalProps> = ({ isOpen, onClo
     const [selectedLoanId, setSelectedLoanId] = useState<string>('');
     const [isReturning, setIsReturning] = useState(false);
 
+    // Modal Notifications
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
+
     if (!isOpen) return null;
 
     // Filter active loans that still have an outstanding balance
@@ -22,7 +41,7 @@ const CashBookReturnModal: React.FC<CashBookReturnModalProps> = ({ isOpen, onClo
         e.preventDefault();
 
         if (!selectedLoanId) {
-            alert('กรุณาเลือกรายการยืมที่ต้องการคืนเงิน');
+            showAlert('กรุณาเลือกรายการ', 'กรุณาเลือกรายการยืมที่ต้องการคืนเงิน', 'warning');
             return;
         }
 
@@ -31,20 +50,18 @@ const CashBookReturnModal: React.FC<CashBookReturnModalProps> = ({ isOpen, onClo
 
         const outstanding = loan.amount - (loan.returnedAmount || 0);
 
-        if (window.confirm(`ยืนยันการคืนเงินเต็มจำนวนยอด ${fmtMoney(outstanding)} บาท สำหรับสัญญา ${loan.id} หรือไม่?`)) {
+        showAlert('ยืนยันการคืนเงิน', `ยืนยันการคืนเงินเต็มจำนวนยอด ฿${fmtMoney(outstanding)} สำหรับสัญญา ${loan.id} หรือไม่?`, 'warning', async () => {
             setIsReturning(true);
             try {
-                // คืนให้เต็มจำนวน
                 await repayLoan(loan.id, outstanding);
-                alert('ทำการคืนเงินเรียบร้อยแล้ว');
-                onClose();
+                showAlert('สำเร็จ', 'ทำการคืนเงินเรียบร้อยแล้ว', 'success', () => onClose());
             } catch (error) {
-                alert('เกิดข้อผิดพลาดในการคืนเงิน');
+                showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการคืนเงิน กรุณาลองใหม่อีกครั้ง', 'error');
                 console.error(error);
             } finally {
                 setIsReturning(false);
             }
-        }
+        });
     };
 
     return (
@@ -92,8 +109,8 @@ const CashBookReturnModal: React.FC<CashBookReturnModalProps> = ({ isOpen, onClo
                                             key={loan.id}
                                             onClick={() => setSelectedLoanId(loan.id)}
                                             className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${isSelected
-                                                    ? 'border-blue-500 bg-blue-50/50'
-                                                    : 'border-gray-200 bg-white hover:border-blue-300'
+                                                ? 'border-blue-500 bg-blue-50/50'
+                                                : 'border-gray-200 bg-white hover:border-blue-300'
                                                 }`}
                                         >
                                             <div className="flex justify-between items-start">
@@ -130,8 +147,8 @@ const CashBookReturnModal: React.FC<CashBookReturnModalProps> = ({ isOpen, onClo
                         type="submit"
                         disabled={!selectedLoanId || isReturning || activeLoans.length === 0}
                         className={`px-8 py-2.5 rounded-xl font-bold text-white transition-colors flex items-center gap-2 ${!selectedLoanId || isReturning || activeLoans.length === 0
-                                ? 'bg-blue-300 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20'
+                            ? 'bg-blue-300 cursor-not-allowed'
+                            : 'bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20'
                             }`}
                     >
                         {isReturning ? (
@@ -148,6 +165,19 @@ const CashBookReturnModal: React.FC<CashBookReturnModalProps> = ({ isOpen, onClo
                     </button>
                 </div>
             </form>
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
         </div>
     );
 };

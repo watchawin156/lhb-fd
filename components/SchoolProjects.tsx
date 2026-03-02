@@ -1,4 +1,7 @@
 import React, { useState, useMemo } from 'react';
+import { useSchoolData } from '../context/SchoolContext';
+import ConfirmModal from './ConfirmModal';
+import DeleteConfirmModal from './DeleteConfirmModal';
 
 // ===== TYPES =====
 interface ProjectExpense {
@@ -107,6 +110,36 @@ const SchoolProjects: React.FC = () => {
         department: DEPARTMENTS[0], category: CATEGORIES[0]
     });
 
+    // Modal Notifications
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
+
+    const [deleteModalConfig, setDeleteModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: (reason: string) => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { }
+    });
+
     const saveProjects = (newProjects: Project[]) => {
         setProjects(newProjects);
         localStorage.setItem('school-projects-v2', JSON.stringify(newProjects));
@@ -155,10 +188,17 @@ const SchoolProjects: React.FC = () => {
     };
 
     const handleDelete = (id: number) => {
-        if (confirm('ต้องการลบโครงการนี้หรือไม่?')) {
-            saveProjects(projects.filter(p => p.id !== id));
-            setSelectedProject(null);
-        }
+        const p = projects.find(proj => proj.id === id);
+        setDeleteModalConfig({
+            isOpen: true,
+            title: 'ยืนยันการลบโครงการ',
+            message: `คุณยืนยันที่จะลบโครงการ "${p?.name}" ใช่หรือไม่? ข้อมูลการใช้จ่ายทั้งหมดในโครงการนี้จะถูกลบออกด้วย`,
+            onConfirm: (reason: string) => {
+                saveProjects(projects.filter(proj => proj.id !== id));
+                setSelectedProject(null);
+                setDeleteModalConfig(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
     // Add expense to project
@@ -182,12 +222,22 @@ const SchoolProjects: React.FC = () => {
     };
 
     const handleDeleteExpense = (projId: number, expId: number) => {
-        const updated = projects.map(p => {
-            if (p.id !== projId) return p;
-            return { ...p, expenses: p.expenses.filter(e => e.id !== expId) };
+        const p = projects.find(proj => proj.id === projId);
+        const exp = p?.expenses?.find(e => e.id === expId);
+        setDeleteModalConfig({
+            isOpen: true,
+            title: 'ยืนยันการลบรายการใช้จ่าย',
+            message: `คุณยืนยันที่จะลบรายการ "${exp?.description}" จำนวน ฿${exp?.amount} ในโครงการ "${p?.name}" ใช่หรือไม่?`,
+            onConfirm: (reason: string) => {
+                const updated = projects.map(proj => {
+                    if (proj.id !== projId) return proj;
+                    return { ...proj, expenses: proj.expenses.filter(e => e.id !== expId) };
+                });
+                saveProjects(updated);
+                setSelectedProject(updated.find(proj => proj.id === projId) || null);
+                setDeleteModalConfig(prev => ({ ...prev, isOpen: false }));
+            }
         });
-        saveProjects(updated);
-        setSelectedProject(updated.find(p => p.id === projId) || null);
     };
 
     // CSV Import
@@ -199,11 +249,11 @@ const SchoolProjects: React.FC = () => {
             const text = ev.target?.result as string;
             const imported = parseCSV(text);
             if (imported.length === 0) {
-                alert('ไม่สามารถอ่านไฟล์ CSV ได้ กรุณาตรวจสอบรูปแบบ');
+                showAlert('ผิดพลาด', 'ไม่สามารถอ่านไฟล์ CSV ได้ กรุณาตรวจสอบรูปแบบไฟล์ให้ถูกต้อง', 'error');
                 return;
             }
             saveProjects([...projects, ...imported]);
-            alert(`นำเข้าสำเร็จ ${imported.length} โครงการ`);
+            showAlert('สำเร็จ', `นำเข้าสำเร็จ ${imported.length} โครงการ`, 'success');
         };
         reader.readAsText(file, 'UTF-8');
         e.target.value = '';
@@ -620,6 +670,29 @@ const SchoolProjects: React.FC = () => {
                     </form>
                 </div>
             )}
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
+
+            <DeleteConfirmModal
+                isOpen={deleteModalConfig.isOpen}
+                title={deleteModalConfig.title}
+                message={deleteModalConfig.message}
+                onCancel={() => setDeleteModalConfig(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={(reason) => {
+                    deleteModalConfig.onConfirm(reason);
+                }}
+            />
         </div>
     );
 };

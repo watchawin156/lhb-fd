@@ -1,8 +1,9 @@
 
-import React, { useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useSchoolData } from '../context/SchoolContext';
 import * as XLSX from 'xlsx';
 import { buildCoverPDF, openBlob } from './exportReportBuilders';
+import ConfirmModal from './ConfirmModal';
 
 const FONT_CDN = {
     regular: 'https://cdn.jsdelivr.net/gh/watchawin156/font@main/THSarabunNew.ttf',
@@ -62,6 +63,23 @@ const CashBookCover: React.FC = () => {
     const { transactions, schoolSettings } = useSchoolData();
     const printRef = useRef<HTMLDivElement>(null);
 
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
+
     const today = new Date();
     const fiscalYear = getFiscalYear(today);    // ค.ศ.
     const fiscalYearBE = toBE(fiscalYear);       // พ.ศ.
@@ -114,7 +132,7 @@ const CashBookCover: React.FC = () => {
             openBlob(bytes);
         } catch (err) {
             console.error(err);
-            alert('เกิดข้อผิดพลาดในการสร้าง PDF');
+            showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการสร้าง PDF', 'error');
         }
     };
 
@@ -315,8 +333,20 @@ const CashBookCover: React.FC = () => {
             width: 210mm; padding: 14mm 14mm;
             box-shadow: none;
           }
-        }
-      `}</style>
+              `}</style>
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
         </div>
     );
 };

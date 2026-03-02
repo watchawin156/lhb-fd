@@ -4,6 +4,7 @@ import { useSchoolData } from '../context/SchoolContext';
 import { Transaction } from '../types';
 import FundViewTable from './fundview/FundViewTable';
 import FundViewModals from './fundview/FundViewModals';
+import ConfirmModal from './ConfirmModal';
 import { type1Funds, taxTriggerFunds, parseDateInput } from './fundview/FundViewTypes';
 
 interface FundViewProps {
@@ -20,8 +21,37 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
     const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [deleteConfirmation, setDeleteConfirmation] = useState('');
+
+    // Delete Modal State
+    const [deleteModalConfig, setDeleteModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: (reason: string) => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { }
+    });
+
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
+
     const [editFormData, setEditFormData] = useState<Partial<Transaction>>({});
 
     const today = new Date();
@@ -101,7 +131,7 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const amountVal = parseFloat(formData.amount) || 0;
-        if (amountVal <= 0) { alert("จำนวนเงินต้องมากกว่า 0"); return; }
+        if (amountVal <= 0) { showAlert("ข้อมูลไม่ถูกต้อง", "จำนวนเงินต้องมากกว่า 0", "warning"); return; }
         const incomeAmount = formData.transactionType === 'income' ? amountVal : 0;
         const expenseAmount = formData.transactionType === 'expense' ? amountVal : 0;
         let taxAmount = 0;
@@ -116,7 +146,7 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
             } else if (formData.description.includes('อุดหนุน') || formData.description.includes('ดอกเบี้ยเงินอุดหนุน')) {
                 finalFundType = 'fund-state-subsidy-interest';
             } else {
-                alert('กรุณาระบุคำว่า "ดอกเบี้ยอาหารกลางวัน" หรือ "ดอกเบี้ยเงินอุดหนุน" ในชื่อรายการสำหรับหมวดเงินรายได้แผ่นดิน');
+                showAlert('ข้อมูลไม่ถูกต้อง', 'กรุณาระบุคำว่า "ดอกเบี้ยอาหารกลางวัน" หรือ "ดอกเบี้ยเงินอุดหนุน" ในชื่อรายการสำหรับหมวดเงินรายได้แผ่นดิน', 'warning');
                 return;
             }
         }
@@ -136,7 +166,7 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
                 description: `หักภาษี ณ ที่จ่าย (${formData.recipientType === 'juristic' ? 'ภงด.53' : 'ภงด.3'}) - จาก${cleanPageTitle} - ${formData.description}`,
                 income: taxAmount, expense: 0, payer: cleanPageTitle
             });
-            alert(`ระบบได้บันทึกการหักภาษี ณ ที่จ่าย จำนวน ${taxAmount.toLocaleString()} บาท\nไปยังบัญชี "7. เงินภาษี 1%" เรียบร้อยแล้ว`);
+            showAlert('สำเร็จ', `ระบบได้บันทึกการหักภาษี ณ ที่จ่าย จำนวน ${taxAmount.toLocaleString()} บาท\nไปยังบัญชี "7. เงินภาษี 1%" เรียบร้อยแล้ว`, 'success');
         }
         setIsModalOpen(false);
         setFormData({ date: new Date().toISOString().split('T')[0], docNo: '', description: '', transactionType: 'expense', amount: '', payer: '', payee: '', recipientType: 'juristic' });
@@ -145,7 +175,7 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
 
     const handleRowClick = (tx: Transaction) => {
         setSelectedTx(tx); setIsDetailModalOpen(true);
-        setIsEditing(false); setIsDeleting(false); setDeleteConfirmation('');
+        setIsEditing(false); setDeleteModalConfig(prev => ({ ...prev, isOpen: false }));
     };
     const startEdit = () => {
         if (!selectedTx) return;
@@ -154,25 +184,25 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
     };
     const saveEdit = () => {
         if (!selectedTx) return;
-        if (!editFormData.date || !editFormData.docNo || !editFormData.description) { alert("กรุณากรอกข้อมูลให้ครบ"); return; }
+        if (!editFormData.date || !editFormData.docNo || !editFormData.description) { showAlert("ข้อมูลไม่ครบถ้วน", "กรุณากรอกข้อมูลให้ครบ", "warning"); return; }
         editTransaction(selectedTx.id, editFormData);
         setIsEditing(false); setIsDetailModalOpen(false);
     };
-    const handleDelete = () => {
+    const handleDelete = (reason: string) => {
         if (!selectedTx) return;
-        if (deleteConfirmation !== 'ยืนยัน') { alert('กรุณาพิมพ์คำว่า "ยืนยัน" ให้ถูกต้อง'); return; }
-        deleteTransaction(selectedTx.id, "ผู้ใช้ลบรายการ manual");
+        deleteTransaction(selectedTx.id, `ลบรายการในหมวดเงิน: ${reason}`);
+        setDeleteModalConfig(prev => ({ ...prev, isOpen: false }));
         setIsDetailModalOpen(false);
     };
 
     const openExportModal = (format: 'pdf' | 'excel') => { setExportFormat(format); setIsExportModalOpen(true); };
     const handleExportConfirm = () => {
         const parsed = parseDateInput(exportDateInput);
-        if (!parsed) { alert('รูปแบบวันที่ไม่ถูกต้อง\nตัวอย่าง: 16/5/2569 หรือ 16/5/2569 - 17/5/2569'); return; }
+        if (!parsed) { showAlert("รูปแบบวันที่ไม่ถูกต้อง", 'ตัวอย่าง: 16/5/2569 หรือ 16/5/2569 - 17/5/2569', "warning"); return; }
         if (exportFormat === 'pdf') {
             handleHelperExportPDF(pageId, title, parsed.start, parsed.end, transactions, pageTransactions, schoolSettings)
                 .then(() => setIsExportModalOpen(false))
-                .catch(err => alert('เกิดข้อผิดพลาด: ' + String(err)));
+                .catch(err => showAlert("ข้อผิดพลาด", 'เกิดข้อผิดพลาด: ' + String(err), "error"));
         } else {
             handleHelperExportExcel(pageId, title, parsed.start, parsed.end, transactions, pageTransactions);
             setIsExportModalOpen(false);
@@ -248,15 +278,14 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
 
             <FundViewModals
                 isDetailModalOpen={isDetailModalOpen} selectedTx={selectedTx}
-                isEditing={isEditing} isDeleting={isDeleting}
-                deleteConfirmation={deleteConfirmation} editFormData={editFormData}
-                onCloseDetail={() => { setIsDetailModalOpen(false); setIsEditing(false); setIsDeleting(false); setDeleteConfirmation(''); }}
+                isEditing={isEditing}
+                deleteModalConfig={deleteModalConfig}
+                setDeleteModalConfig={setDeleteModalConfig}
+                editFormData={editFormData}
+                onCloseDetail={() => { setIsDetailModalOpen(false); setIsEditing(false); setDeleteModalConfig(prev => ({ ...prev, isOpen: false })); }}
                 onStartEdit={startEdit} onSaveEdit={saveEdit}
                 onCancelEdit={() => setIsEditing(false)}
-                onStartDelete={() => setIsDeleting(true)}
-                onCancelDelete={() => { setIsDeleting(false); setDeleteConfirmation(''); }}
-                onConfirmDelete={handleDelete}
-                onDeleteConfirmationChange={setDeleteConfirmation}
+                onConfirmDelete={(reason) => handleDelete(reason)}
                 onEditChange={(e) => { const { name, value } = e.target; setEditFormData(prev => ({ ...prev, [name]: value })); }}
                 onEditDateChange={(date) => setEditFormData(prev => ({ ...prev, date }))}
                 isExportModalOpen={isExportModalOpen} exportFormat={exportFormat}
@@ -264,6 +293,19 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
                 onCloseExport={() => setIsExportModalOpen(false)}
                 onExportDateChange={setExportDateInput}
                 onExportConfirm={handleExportConfirm}
+            />
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
             />
         </div>
     );

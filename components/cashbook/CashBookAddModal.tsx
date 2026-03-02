@@ -5,6 +5,8 @@ import ThaiDatePicker from '../ThaiDatePicker';
 import { fmtShort, fmtMoney, fmtBankShort } from './utils';
 import { buildLoanDocPDF } from '../loanPdfBuilder';
 import BankDetailModal from './BankDetailModal';
+import ConfirmModal from '../ConfirmModal';
+import DeleteConfirmModal from '../DeleteConfirmModal';
 
 interface CashBookAddModalProps {
     isOpen: boolean;
@@ -32,33 +34,50 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     // Shared header fields
     const [addDate, setAddDate] = useState(new Date().toISOString().slice(0, 10));
     const [addFundType, setAddFundType] = useState('fund-subsidy');
-    const [addFundSearch, setAddFundSearch] = useState('');
     const [isFundDropdownOpen, setIsFundDropdownOpen] = useState(false);
+    const [isEditingFund, setIsEditingFund] = useState(false);
+    const [addFundSearch, setAddFundSearch] = useState('');
     const [addDocNo, setAddDocNo] = useState('');
     const [addBankId, setAddBankId] = useState<string>('');
+    const [isEditingBank, setIsEditingBank] = useState(false);
+
+    // Modal Notifications
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info') => {
+        setModalConfig({ isOpen: true, title, message, type });
+    };
 
     // Bank Detail Sub-modal
     const [isBankDetailOpen, setIsBankDetailOpen] = useState(false);
     const [selectedBankDetailId, setSelectedBankDetailId] = useState<string | null>(null);
 
+    // Delete Modal
+    const [deleteModalConfig, setDeleteModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: (reason: string) => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { }
+    });
+
     // --- Macro / Automation Helper ---
-    const applyMacro = (type: 'subsidy-interest' | 'lunch-interest') => {
-        if (type === 'subsidy-interest') {
-            setAddFundType('fund-state-subsidy-interest');
-            updateSub(subItems[0].id, 'description', 'รับดอกเบี้ยเงินอุดหนุน');
-            const bank = schoolSettings.bankAccounts?.find((b: any) =>
-                b.name.includes('อุดหนุน') || b.fundTypes.includes('fund-subsidy')
-            );
-            if (bank) setAddBankId(bank.id);
-        } else if (type === 'lunch-interest') {
-            setAddFundType('fund-state-lunch-interest');
-            updateSub(subItems[0].id, 'description', 'รับดอกเบี้ยอาหารกลางวัน');
-            const bank = schoolSettings.bankAccounts?.find((b: any) =>
-                b.name.includes('อาหารกลางวัน') || b.fundTypes.includes('fund-lunch')
-            );
-            if (bank) setAddBankId(bank.id);
-        }
-    };
+    // Removed per user request
 
     // --- Inject Auto Doc Number Effect ---
     React.useEffect(() => {
@@ -80,7 +99,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     // Sub-items: description + amount (empty amount = header row)
     // โหมดกลุ่ม: แต่ละรายการมี fundType ของตัวเอง
     interface SubItem { id: number; description: string; amount: string; fundType?: string; bankId?: string; }
-    const createSubItem = (): SubItem => ({ id: Date.now() + Math.random(), description: '', amount: '', fundType: 'fund-subsidy', bankId: '' });
+    const createSubItem = (): SubItem => ({ id: Date.now() + Math.random(), description: '', amount: '', fundType: addFundType || 'fund-subsidy', bankId: addBankId || '' });
     const [subItems, setSubItems] = useState<SubItem[]>([createSubItem()]);
 
     // --- Smart Auto-fill: Observe descriptions and suggest fund/bank ---
@@ -245,7 +264,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
     const [pdfDateRange, setPdfDateRange] = useState(''); // e.g. "1/5/2568-9/5/2568"
 
-    const updateSub = (id: number, field: 'description' | 'amount' | 'fundType', value: string) => {
+    const updateSub = (id: number, field: 'description' | 'amount' | 'fundType' | 'bankId', value: string) => {
         setSubItems(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
     };
     const addSubItem = () => setSubItems(prev => [...prev, createSubItem()]);
@@ -272,22 +291,24 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
     const handleBorrowSubmit = async () => {
         if (!borrowFromFund) {
-            alert('กรุณาเลือกกองทุนต้นทาง');
+            showAlert('กรุณากรอกข้อมูล', 'กรุณาเลือกกองทุนต้นทาง', 'warning');
             return;
         }
 
         if (!borrowAmountNum || borrowAmountNum <= 0) {
-            alert('กรุณากรอกจำนวนเงิน');
+            showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกจำนวนเงิน', 'warning');
             return;
         }
 
         if (!borrowPurpose) {
-            alert('กรุณากรอกวัตถุประสงค์การยืม');
+            showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกวัตถุประสงค์การยืม', 'warning');
             return;
         }
 
         const borrowPrefix = schoolSettings.docNumberSettings?.borrowPrefix || 'LN-';
-        const loanId = `${borrowPrefix}${new Date().getFullYear() + 543}-${String(new Date().getTime()).slice(-6)}`;
+        const sequence = String(new Date().getTime()).slice(-4);
+        const docYear = new Date().getFullYear() + 543;
+        const loanId = `${borrowPrefix}${docYear}-${sequence}`;
         const today = new Date().toISOString().slice(0, 10);
 
         const newLoan = {
@@ -306,21 +327,36 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         try {
             setIsGeneratingPDF(true);
 
-            // Add loan to context
-            addLoan(newLoan);
-
-            // Create transaction for borrowed amount
+            // 1. ยืมให้ (Expense from Source Fund)
             await addTransaction({
                 id: Date.now(),
                 date: today,
-                docNo: loanId,
-                description: `ยืมเงินจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
+                docNo: loanId, // ใช้เลขเดียวกัน
+                description: `ยืมให้เพื่อ ${borrowPurpose}`,
                 fundType: borrowFromFund,
+                income: 0,
+                expense: borrowAmountNum,
+                loanId,
+                skipLoanCheck: true,
+                bankId: selectedBankId
+            });
+
+            // 2. ยืมจาก (Income to Target/Purpose)
+            await addTransaction({
+                id: Date.now() + 1,
+                date: today,
+                docNo: loanId, // ใช้เลขเดียวกัน
+                description: `ยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
+                fundType: borrowFromFund, // ในระบบปัจจุบันอาจจะยังเป็นกองทุนเดิมแต่เป็นรายรับ
                 income: borrowAmountNum,
                 expense: 0,
                 loanId,
                 skipLoanCheck: true,
+                bankId: selectedBankId
             });
+
+            // Add loan record
+            addLoan(newLoan);
 
             // Generate PDF as blob
             const pdfBytes = await buildLoanDocPDF(newLoan, false, schoolSettings, today);
@@ -333,7 +369,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         } catch (e) {
             console.warn('Error creating loan', e);
             setIsGeneratingPDF(false);
-            alert('เกิดข้อผิดพลาดในการสร้างสัญญา: ' + String(e));
+            showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการสร้างสัญญา: ' + String(e), 'error');
         }
     };
 
@@ -364,7 +400,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         // === โหมดกลุ่ม ===
         if (isGroupMode) {
             if (!addDocNo) {
-                alert('กรุณากรอกที่เอกสาร');
+                showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกที่เอกสาร', 'warning');
                 return;
             }
             const dataItems = subItems.filter(s => {
@@ -372,7 +408,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 return amt > 0 && !isNaN(amt) && s.description;
             });
             if (dataItems.length === 0) {
-                alert('กรุณากรอกรายการย่อยอย่างน้อย 1 รายการ (ชื่อรายการ + จำนวนเงิน)');
+                showAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกรายการย่อยอย่างน้อย 1 รายการ (ชื่อรายการ + จำนวนเงิน)', 'warning');
                 return;
             }
 
@@ -390,6 +426,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     expense: addTransactionType === 'expense' ? amt : 0,
                     payer: addTransactionType === 'income' ? '' : '',
                     payee: addTransactionType === 'expense' ? '' : '',
+                    bankId: s.bankId
                 });
             }
 
@@ -411,14 +448,14 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         // === โหมดภาษี 1% ===
         if (isTaxMode) {
             if (!addDocNo) {
-                alert('กรุณากรอกที่เอกสาร');
+                showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกที่เอกสาร', 'warning');
                 return;
             }
 
             if (addTransactionType === 'income') {
                 const amt = parseFloat(taxAmount);
                 if (!taxPayerName || isNaN(amt) || amt <= 0) {
-                    alert('กรุณากรอกชื่อผู้จ่าย (ร้านค้า) และจำนวนเงิน');
+                    showAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อผู้จ่าย (ร้านค้า) และจำนวนเงิน', 'warning');
                     return;
                 }
                 addTransaction({
@@ -436,7 +473,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 if (isTaxManualMode) {
                     const amt = parseFloat(taxManualAmount);
                     if (!taxManualDesc || isNaN(amt) || amt <= 0) {
-                        alert('กรุณากรอกรายละเอียดและจำนวนเงิน');
+                        showAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกรายละเอียดและจำนวนเงิน', 'warning');
                         return;
                     }
                     const fundBalance = transactions
@@ -458,12 +495,12 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     });
                 } else {
                     if (!selectedTaxIncomeId) {
-                        alert('กรุณาเลือกรายการรายรับภาษี 1% ที่ต้องการจ่าย');
+                        showAlert('ยังไม่ได้เลือกรายการ', 'กรุณาเลือกรายการรายรับภาษี 1% ที่ต้องการจ่าย', 'warning');
                         return;
                     }
                     const selectedTx = taxIncomeTransactions.find((t: any) => t.id === selectedTaxIncomeId);
                     if (!selectedTx) {
-                        alert('ไม่พบรายการที่เลือก');
+                        showAlert('ข้อผิดพลาด', 'ไม่พบรายการที่เลือก', 'error');
                         return;
                     }
                     const fundBalance = transactions
@@ -507,21 +544,21 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         // === โหมดเงินปัจจัยพื้นฐานนักเรียนยากจน - จ่าย ===
         if (isPoorExpense) {
             if (!addDocNo) {
-                alert('กรุณากรอกที่เอกสาร');
+                showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกที่เอกสาร', 'warning');
                 return;
             }
             if (!selectedPoorIncomeId) {
-                alert('กรุณาเลือกรายการรายรับปัจจัยยากจนที่ต้องการจ่าย');
+                showAlert('ยังไม่ได้เลือกรายการ', 'กรุณาเลือกรายการรายรับปัจจัยยากจนที่ต้องการจ่าย', 'warning');
                 return;
             }
             const selectedTx = poorIncomeTransactions.find((t: any) => t.id === selectedPoorIncomeId);
             if (!selectedTx) {
-                alert('ไม่พบรายการที่เลือก');
+                showAlert('ข้อผิดพลาด', 'ไม่พบรายการที่เลือก', 'error');
                 return;
             }
             const amt = parseFloat(customExpenseAmount);
             if (isNaN(amt) || amt <= 0) {
-                alert('กรุณากรอกจำนวนเงินที่ต้องการจ่าย');
+                showAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกจำนวนเงินที่ต้องการจ่าย', 'warning');
                 return;
             }
             const fundBalance = transactions
@@ -563,21 +600,21 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         // === โหมดเงิน กสศ. - จ่าย ===
         if (isEefExpense) {
             if (!addDocNo) {
-                alert('กรุณากรอกที่เอกสาร');
+                showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกที่เอกสาร', 'warning');
                 return;
             }
             if (!selectedEefIncomeId) {
-                alert('กรุณาเลือกรายการรายรับ กสศ. ที่ต้องการจ่าย');
+                showAlert('ยังไม่ได้เลือกรายการ', 'กรุณาเลือกรายการรายรับ กสศ. ที่ต้องการจ่าย', 'warning');
                 return;
             }
             const selectedTx = eefIncomeTransactions.find((t: any) => t.id === selectedEefIncomeId);
             if (!selectedTx) {
-                alert('ไม่พบรายการที่เลือก');
+                showAlert('ข้อผิดพลาด', 'ไม่พบรายการที่เลือก', 'error');
                 return;
             }
             const amt = parseFloat(customExpenseAmount);
             if (isNaN(amt) || amt <= 0) {
-                alert('กรุณากรอกจำนวนเงินที่ต้องการจ่าย');
+                showAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกจำนวนเงินที่ต้องการจ่าย', 'warning');
                 return;
             }
             const fundBalance = transactions
@@ -617,13 +654,13 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         // === โหมดเงินรายได้แผ่นดิน - จ่าย ===
         if (isStateExpense) {
             if (!addDocNo) {
-                alert('กรุณากรอกที่เอกสาร');
+                showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกที่เอกสาร', 'warning');
                 return;
             }
             if (isStateManualMode) {
                 const amt = parseFloat(stateManualAmount);
                 if (!stateManualDesc || isNaN(amt) || amt <= 0) {
-                    alert('กรุณากรอกรายละเอียดและจำนวนเงิน');
+                    showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกรายละเอียดและจำนวนเงิน', 'warning');
                     return;
                 }
                 const fundBalance = transactions
@@ -646,17 +683,17 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 });
             } else {
                 if (!selectedStateIncomeId) {
-                    alert('กรุณาเลือกรายการรายรับเงินรายได้แผ่นดินที่ต้องการจ่าย');
+                    showAlert('กรุณากรอกข้อมูล', 'กรุณาเลือกรายการรายรับเงินรายได้แผ่นดินที่ต้องการจ่าย', 'warning');
                     return;
                 }
                 const selectedTx = stateIncomeTransactions.find((t: any) => t.id === selectedStateIncomeId);
                 if (!selectedTx) {
-                    alert('ไม่พบรายการที่เลือก');
+                    showAlert('ข้อผิดพลาด', 'ไม่พบรายการที่เลือก', 'error');
                     return;
                 }
                 const amt = parseFloat(customExpenseAmount);
                 if (isNaN(amt) || amt <= 0) {
-                    alert('กรุณากรอกจำนวนเงินที่ต้องการจ่าย');
+                    showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกจำนวนเงินที่ต้องการจ่าย', 'warning');
                     return;
                 }
                 const fundBalance = transactions
@@ -704,7 +741,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         const headerTitle = headerItem?.description || '';
 
         if (dataItems.length === 0 || !addDocNo) {
-            alert('กรุณากรอกที่เอกสาร และรายการย่อยอย่างน้อย 1 รายการ (ชื่อรายการ + จำนวนเงิน)');
+            showAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกที่เอกสาร และรายการย่อยอย่างน้อย 1 รายการ (ชื่อรายการ + จำนวนเงิน)', 'warning');
             return;
         }
 
@@ -712,7 +749,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
         if (addTransactionType === 'expense') {
             if (!addPayeeType) {
-                alert('กรุณาเลือกประเภทผู้รับเงิน (นิติบุคคล หรือ บุคคลธรรมดา)');
+                showAlert('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกประเภทผู้รับเงิน (นิติบุคคล หรือ บุคคลธรรมดา)', 'warning');
                 return;
             }
             const isTaxBorrowBypass = headerTitle.includes('ยืมจาก เงินภาษี 1%') || dataItems.some(d => d.description.includes('ยืมจาก เงินภาษี 1%'));
@@ -722,6 +759,9 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     .reduce((acc: number, t: any) => acc + (t.income || 0) - (t.expense || 0), 0);
             }
         }
+
+        let invalidStateIncome = false;
+        let missingBankTarget = false;
 
         for (let idx = 0; idx < dataItems.length; idx++) {
             const s = dataItems[idx];
@@ -756,15 +796,20 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             }
 
             if (finalFundType?.startsWith('fund-state')) {
-                if (!descMatch.includes('ดอกเบี้ยเงินอุดหนุน') && !descMatch.includes('ดอกเบี้ยอาหารกลางวัน') && !descMatch.includes('ดอกเบี้ยเงินอาหารกลางวัน') && !descMatch.includes('เบิกดอกเบี้ย')) {
-                    alert(`หมวดเงินรายได้แผ่นดิน อนุญาตให้บันทึกเฉพาะ "ดอกเบี้ยเงินอุดหนุน" และ "ดอกเบี้ยอาหารกลางวัน" เท่านั้น\nพบรายการที่ไม่สอดคล้อง: ${s.description}`);
-                    return;
+                const isAllowed = descMatch.includes('ดอกเบี้ยเงินอุดหนุน') || descMatch.includes('ดอกเบี้ยอาหารกลางวัน') || descMatch.includes('ดอกเบี้ยเงินอาหารกลางวัน') || descMatch.includes('เบิกดอกเบี้ย');
+                if (!isAllowed) {
+                    showAlert('ข้อผิดพลาด', `หมวดเงินรายได้แผ่นดิน อนุญาตให้บันทึกเฉพาะ "ดอกเบี้ยเงินอุดหนุน" และ "ดอกเบี้ยอาหารกลางวัน" เท่านั้น\nพบรายการที่ไม่สอดคล้อง: ${s.description}`, 'error');
+                    invalidStateIncome = true;
                 }
             }
 
             if (finalFundType?.startsWith('fund-state') && !finalBankId && addTransactionType !== 'expense') {
-                alert(`กรุณาเลือกหรือตรวจสอบบัญชีธนาคารสำหรับรายการ '${s.description}' (หมวดเงินรายได้แผ่นดิน)`);
-                return;
+                showAlert('ข้อความแจ้งเตือน', `กรุณาเลือกหรือตรวจสอบบัญชีธนาคารสำหรับรายการ '${s.description}' (หมวดเงินรายได้แผ่นดิน)`, 'warning');
+                missingBankTarget = true;
+            }
+
+            if (invalidStateIncome || missingBankTarget) {
+                return; // Stop processing and return if validation fails
             }
 
             addTransaction({
@@ -877,38 +922,34 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                         {/* ส่วนหลัก: โครงการ / หมวด / บัญชี */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
                             {/* 1. โครงการ / กิจกรรม (ใช้ Description รายการแรกเป็นหลักในโหมดเดี่ยว) */}
-                            {!isGroupMode && (
-                                <div className="col-span-1">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">1. โครงการ / กิจกรรม</label>
-                                    <input
-                                        type="text"
-                                        value={subItems[0]?.description || ''}
-                                        onChange={e => updateSub(subItems[0].id, 'description', e.target.value)}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
-                                        placeholder="เช่น กิจกรรมพัฒนาผู้เรียน..."
-                                    />
-                                    <div className="mt-2 flex flex-wrap gap-1">
-                                        <button type="button" onClick={() => applyMacro('subsidy-interest')}
-                                            className="px-2 py-1 rounded-md bg-blue-50 text-blue-600 text-[10px] font-bold hover:bg-blue-100 border border-blue-100">
-                                            + ดอกเบี้ยอุดหนุน
-                                        </button>
-                                        <button type="button" onClick={() => applyMacro('lunch-interest')}
-                                            className="px-2 py-1 rounded-md bg-orange-50 text-orange-600 text-[10px] font-bold hover:bg-orange-100 border border-orange-100">
-                                            + ดอกเบี้ยอาหารกลางวัน
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                            <div className={isGroupMode ? 'col-span-1 md:col-span-3' : 'col-span-1'}>
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">1. โครงการ / กิจกรรม</label>
+                                <input
+                                    type="text"
+                                    value={subItems[0]?.description || ''}
+                                    onChange={e => updateSub(subItems[0].id, 'description', e.target.value)}
+                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                                    placeholder="เช่น กิจกรรมพัฒนาผู้เรียน..."
+                                />
+                            </div>
 
                             {/* 2. หมวดเงิน (Category) */}
                             <div className={isGroupMode ? 'col-span-1' : 'col-span-1'}>
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">2. หมวดเงิน</label>
-                                {!isGroupMode ? (
+                                {(!isGroupMode && !isEditingFund) ? (
+                                    <div
+                                        onDoubleClick={() => setIsEditingFund(true)}
+                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold cursor-pointer select-none truncate"
+                                        title="ดับเบิลคลิกเพื่อแก้ไข"
+                                    >
+                                        {FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'เลือกหมวดเงิน'}
+                                    </div>
+                                ) : !isGroupMode ? (
                                     <div className="relative">
                                         <button
                                             type="button"
                                             onClick={() => setIsFundDropdownOpen(!isFundDropdownOpen)}
-                                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold outline-none focus:border-blue-400 transition-all flex justify-between items-center"
+                                            className="w-full px-4 py-2.5 rounded-xl border border-blue-400 bg-white text-sm font-semibold outline-none ring-2 ring-blue-100 transition-all flex justify-between items-center"
                                         >
                                             <span className="truncate">
                                                 {FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'เลือกหมวดเงิน'}
@@ -944,6 +985,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                                                             onClick={() => {
                                                                                 setAddFundType(opt.value);
                                                                                 setIsFundDropdownOpen(false);
+                                                                                setIsEditingFund(false);
                                                                                 setAddFundSearch('');
                                                                                 // Auto-select bank logic
                                                                                 const autoBank = schoolSettings.bankAccounts?.find(b => b.fundTypes.includes(opt.value));
@@ -963,38 +1005,54 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                         )}
                                     </div>
                                 ) : (
-                                    <div className="h-full flex items-center px-4 bg-gray-100 rounded-xl text-xs text-gray-400 italic">เลือกหมวดในรายการย่อย</div>
+                                    <div className="h-full flex items-center px-4 bg-gray-100 rounded-xl text-xs text-gray-400 italic">เลือกหมวดในแต่ละบรรทัด</div>
                                 )}
                             </div>
 
                             {/* 3. บัญชีธนาคาร (Bank Account) */}
                             <div className="col-span-1">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">3. บัญชีธนาคาร</label>
-                                <div className="flex gap-1">
-                                    <select
-                                        value={addBankId}
-                                        onChange={e => setAddBankId(e.target.value)}
-                                        className="flex-1 px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold outline-none focus:border-blue-400 transition-all appearance-none"
+                                {!isGroupMode && !isEditingBank ? (
+                                    <div
+                                        onDoubleClick={() => setIsEditingBank(true)}
+                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold cursor-pointer select-none truncate"
+                                        title="ดับเบิลคลิกเพื่อแก้ไข"
                                     >
-                                        <option value="">-- เลือกบัญชี --</option>
-                                        {schoolSettings.bankAccounts?.map(acc => (
-                                            <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
-                                        ))}
-                                    </select>
-                                    {addBankId && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedBankDetailId(addBankId);
-                                                setIsBankDetailOpen(true);
+                                        {schoolSettings.bankAccounts?.find(b => b.id === addBankId)?.name || 'เลือกบัญชีธนาคาร'}
+                                    </div>
+                                ) : !isGroupMode ? (
+                                    <div className="flex gap-1">
+                                        <select
+                                            autoFocus
+                                            value={addBankId}
+                                            onChange={e => {
+                                                setAddBankId(e.target.value);
+                                                setIsEditingBank(false);
                                             }}
-                                            className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-colors border border-blue-100"
-                                            title="ดูรายละเอียดบัญชี"
+                                            onBlur={() => setIsEditingBank(false)}
+                                            className="flex-1 px-3 py-2.5 rounded-xl border border-blue-400 bg-white text-sm font-semibold outline-none ring-2 ring-blue-100 transition-all appearance-none"
                                         >
-                                            <span className="material-symbols-outlined text-lg">manage_accounts</span>
-                                        </button>
-                                    )}
-                                </div>
+                                            <option value="">-- เลือกบัญชี --</option>
+                                            {schoolSettings.bankAccounts?.map(acc => (
+                                                <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ) : (
+                                    <div className="h-full flex items-center px-4 bg-gray-100 rounded-xl text-xs text-gray-400 italic">เลือกบัญชีในแต่ละบรรทัด</div>
+                                )}
+                                {addBankId && !isGroupMode && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedBankDetailId(addBankId);
+                                            setIsBankDetailOpen(true);
+                                        }}
+                                        className="mt-1 w-full flex items-center justify-center gap-1 text-[10px] text-blue-500 font-bold hover:underline"
+                                    >
+                                        <span className="material-symbols-outlined text-xs">manage_accounts</span>
+                                        รายละเอียดบัญชี
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -1586,18 +1644,30 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                                         placeholder="จำนวนเงิน" />
                                                 </div>
                                             </div>
-                                            {/* โหมดกลุ่ม: dropdown เลือกหมวดเงินแต่ละรายการ */}
+                                            {/* โหมดกลุ่ม: dropdown เลือกหมวดเงินและบัญชีธนาคารแต่ละรายการ */}
                                             {isGroupMode && (
-                                                <div className="px-3 pb-2.5 pt-0">
-                                                    <select
-                                                        value={s.fundType || 'fund-subsidy'}
-                                                        onChange={e => updateSub(s.id, 'fundType', e.target.value)}
-                                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs outline-none focus:border-purple-400 bg-gray-50 transition-colors"
-                                                    >
-                                                        {FUND_TYPE_OPTIONS.map(opt => (
-                                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                        ))}
-                                                    </select>
+                                                <div className="px-3 pb-2.5 pt-0 space-y-2">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <select
+                                                            value={s.fundType || 'fund-subsidy'}
+                                                            onChange={e => updateSub(s.id, 'fundType', e.target.value)}
+                                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[10px] outline-none focus:border-purple-400 bg-gray-50 transition-colors"
+                                                        >
+                                                            {FUND_TYPE_OPTIONS.map(opt => (
+                                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                            ))}
+                                                        </select>
+                                                        <select
+                                                            value={s.bankId || ''}
+                                                            onChange={e => updateSub(s.id, 'bankId', e.target.value)}
+                                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[10px] outline-none focus:border-purple-400 bg-gray-50 transition-colors"
+                                                        >
+                                                            <option value="">-- บัญชีธนาคาร --</option>
+                                                            {schoolSettings.bankAccounts?.sort((a, b) => a.id === 'ba-other' ? 1 : b.id === 'ba-other' ? -1 : 0).map(acc => (
+                                                                <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -1652,6 +1722,19 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     transactions={transactions}
                 />
 
+                <ConfirmModal
+                    isOpen={modalConfig.isOpen}
+                    onConfirm={() => {
+                        if (modalConfig.onConfirm) modalConfig.onConfirm();
+                        setModalConfig({ ...modalConfig, isOpen: false });
+                    }}
+                    onCancel={() => setModalConfig({ ...modalConfig, isOpen: false })}
+                    title={modalConfig.title}
+                    message={modalConfig.message}
+                    type={modalConfig.type}
+                    showCancel={!!modalConfig.onConfirm}
+                />
+
                 {/* Footer buttons (Premium Design) */}
                 <div className="p-6 border-t border-gray-100 shrink-0 bg-gray-50/50 flex justify-between items-center px-8">
                     <div className="text-left">
@@ -1670,6 +1753,28 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     </div>
                 </div>
             </form>
+            {/* Bank Detail Sub-modal */}
+            {isBankDetailOpen && selectedBankDetailId && (
+                <BankDetailModal
+                    isOpen={isBankDetailOpen}
+                    onClose={() => setIsBankDetailOpen(false)}
+                    bankId={selectedBankDetailId}
+                    schoolSettings={schoolSettings}
+                    transactions={transactions}
+                />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            <DeleteConfirmModal
+                isOpen={deleteModalConfig.isOpen}
+                title={deleteModalConfig.title}
+                message={deleteModalConfig.message}
+                onCancel={() => setDeleteModalConfig(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={(reason) => {
+                    deleteModalConfig.onConfirm(reason);
+                    setDeleteModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+            />
         </div>
     );
 };

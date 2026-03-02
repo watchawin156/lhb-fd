@@ -42,6 +42,7 @@ const DEFAULT_SETTINGS: SchoolSettingsData = {
     { id: 'ba-2', name: 'บช.เงิน กสศ. (ธกส.)', bankName: 'ธนาคารเพื่อการเกษตรและสหกรณ์', accountNo: '020-2-XXXXX-X', fundTypes: ['fund-eef'], color: 'purple' },
     { id: 'ba-3', name: 'บช.เงินอาหารกลางวัน (ธกส.)', bankName: 'ธนาคารเพื่อการเกษตรและสหกรณ์', accountNo: '020-2-XXXXX-X', fundTypes: ['fund-lunch'], color: 'orange' },
     { id: 'ba-4', name: 'บช.เงินรายได้สถานศึกษา', bankName: 'ธนาคารออมสิน', accountNo: '000-0-XXXXX-X', fundTypes: ['fund-school-income'], color: 'blue' },
+    { id: 'ba-other', name: 'บัญชีอื่นๆ', bankName: 'อื่นๆ', accountNo: 'N/A', fundTypes: [], color: 'gray' },
   ]
 };
 
@@ -342,21 +343,8 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const checkForAutoRepay = (fundType: string) => {
-    const balance = getFundBalance(fundType);
-    const relatedLoans = loans.filter(l => l.toFund === fundType && l.status === 'active');
-    relatedLoans.forEach(l => {
-      const outstanding = l.amount - (l.returnedAmount || 0);
-      if (balance <= 0) return;
-      if (balance >= outstanding) {
-        if (window.confirm(`หมวด ${getFundTitle(fundType)} มีเงินเพียงพอจะแจ้งคืนเงินยืมเลขที่ ${l.id} จำนวน ${outstanding.toLocaleString()} บาทหรือไม่?`)) {
-          repayLoan(l.id, outstanding);
-        }
-      } else {
-        const str = window.prompt(`หมวด ${getFundTitle(fundType)} มีเงินคงเหลือ ${balance.toLocaleString()} บาท\nต้องการคืนเงินสัญญา ${l.id} จำนวนเท่าไร (สูงสุด ${outstanding.toLocaleString()}):`);
-        const amt = parseFloat(str || '0');
-        if (amt > 0) repayLoan(l.id, Math.min(amt, balance));
-      }
-    });
+    // Moved modal logic to CashBook components for better UI control
+    // This function can be kept for background logic or removed if handled elsewhere
   };
 
   const addTransaction = async (tx: Transaction) => {

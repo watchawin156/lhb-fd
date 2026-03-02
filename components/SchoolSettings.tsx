@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSchoolData } from '../context/SchoolContext';
 import { FUND_TYPE_OPTIONS } from '../utils';
+import ConfirmModal from './ConfirmModal';
+import DeleteConfirmModal from './DeleteConfirmModal';
 
 const SchoolSettings: React.FC = () => {
   const { schoolSettings, updateSchoolSettings } = useSchoolData();
@@ -12,6 +14,38 @@ const SchoolSettings: React.FC = () => {
     setFormData(schoolSettings);
   }, [schoolSettings]);
 
+  // Modal State
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'error' | 'success';
+    onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmLabel?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+
+  const [deleteModalConfig, setDeleteModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: (reason: string) => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { }
+  });
+
+  const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+    setModalConfig({ isOpen: true, title, message, type, onConfirm, showCancel: !!onConfirm });
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -21,7 +55,7 @@ const SchoolSettings: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        alert("ขนาดไฟล์เกิน 2MB");
+        showAlert('ไฟล์มีขนาดใหญ่เกินไป', 'ขนาดไฟล์โลโก้ต้องไม่เกิน 2MB', 'error');
         return;
       }
       const reader = new FileReader();
@@ -71,26 +105,35 @@ const SchoolSettings: React.FC = () => {
   };
 
   const deleteAccount = (id: string) => {
-    if (confirm('ต้องการลบบัญชีนี้หรือไม่?')) {
-      setFormData(prev => ({
-        ...prev,
-        bankAccounts: (prev.bankAccounts || []).filter(acc => acc.id !== id)
-      }));
-    }
+    const acc = formData.bankAccounts?.find(a => a.id === id);
+    setDeleteModalConfig({
+      isOpen: true,
+      title: 'ยืนยันการลบบัญชีธนาคาร',
+      message: `คุณยืนยันที่จะลบบัญชีธนาคาร "${acc?.name}" หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้`,
+      onConfirm: (reason: string) => {
+        setFormData(prev => ({
+          ...prev,
+          bankAccounts: (prev.bankAccounts || []).filter(a => a.id !== id)
+        }));
+        setDeleteModalConfig(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleSave = () => {
     updateSchoolSettings(formData);
-    alert('บันทึกข้อมูลเรียบร้อยแล้ว');
+    showAlert('บันทึกสำเร็จ', 'ข้อมูลโรงเรียนได้รับการอัปเดตเรียบร้อยแล้ว', 'success');
     setIsUnlocked(false);
   };
 
   const handleUnlock = () => {
+    // สำหรับการปลดล็อค เราอาจจะใช้ Prompt Modal ในอนาคต
+    // แต่ปัจจุบันขอใช้ prompt เดิมไปก่อนหรือเปลี่ยนเป็น modal พิเศษ
     const pwd = prompt('กรุณาป้อนรหัสผ่านเพื่อแก้ไขข้อมูล (รหัสจำลอง: 1234)');
     if (pwd === '1234') {
       setIsUnlocked(true);
     } else if (pwd !== null) {
-      alert('รหัสผ่านไม่ถูกต้อง');
+      showAlert('รหัสผ่านไม่ถูกต้อง', 'รหัสผ่านที่คุณป้อนไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง', 'error');
     }
   };
 
@@ -302,6 +345,31 @@ const SchoolSettings: React.FC = () => {
         </div>
 
       </div>
+
+      <ConfirmModal
+        isOpen={modalConfig.isOpen}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+        onConfirm={() => {
+          modalConfig.onConfirm?.();
+          setModalConfig({ ...modalConfig, isOpen: false });
+        }}
+        onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+        showCancel={modalConfig.showCancel}
+        confirmLabel={modalConfig.confirmLabel || (modalConfig.type === 'warning' ? 'ยืนยัน' : 'ตกลง')}
+        cancelLabel="ยกเลิก"
+      />
+
+      <DeleteConfirmModal
+        isOpen={deleteModalConfig.isOpen}
+        title={deleteModalConfig.title}
+        message={deleteModalConfig.message}
+        onCancel={() => setDeleteModalConfig(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={(reason) => {
+          deleteModalConfig.onConfirm(reason);
+        }}
+      />
     </div>
   );
 };

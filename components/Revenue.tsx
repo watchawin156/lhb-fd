@@ -6,6 +6,7 @@ import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { PDF_FONTS } from './pdfConfig';
 import { Receipt } from '../types';
+import ConfirmModal from './ConfirmModal';
 
 const Revenue: React.FC = () => {
   const { receipts, addReceipt } = useSchoolData();
@@ -15,6 +16,24 @@ const Revenue: React.FC = () => {
     paymentMethod: 'cash'
   });
 
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'error' | 'success';
+    onConfirm?: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+
+  const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+    setModalConfig({ isOpen: true, title, message, type, onConfirm });
+  };
+
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -22,7 +41,7 @@ const Revenue: React.FC = () => {
 
   const handleSave = () => {
     if (!formData.payer || !formData.amount) {
-      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+      showAlert('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกข้อมูลให้ครบถ้วน', 'warning');
       return;
     }
 
@@ -105,7 +124,7 @@ const Revenue: React.FC = () => {
       window.open(URL.createObjectURL(blob), '_blank');
     } catch (e) {
       console.error(e);
-      alert('Cannot generate PDF');
+      showAlert('ข้อผิดพลาด', 'ไม่สามารถสร้างเอกสาร PDF ได้', 'error');
     }
   };
 
@@ -266,6 +285,19 @@ const Revenue: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={modalConfig.isOpen}
+        onConfirm={() => {
+          if (modalConfig.onConfirm) modalConfig.onConfirm();
+          setModalConfig(prev => ({ ...prev, isOpen: false }));
+        }}
+        onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+        showCancel={!!modalConfig.onConfirm}
+      />
     </div>
   );
 };

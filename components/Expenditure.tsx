@@ -5,6 +5,7 @@ import { PRItem } from '../types';
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { PDF_FONTS } from './pdfConfig';
+import ConfirmModal from './ConfirmModal';
 
 const Expenditure: React.FC = () => {
   const { createPR, budgetItems } = useSchoolData();
@@ -14,6 +15,23 @@ const Expenditure: React.FC = () => {
   const [requester, setRequester] = useState('ครูสมศรี ใจดี');
   const [department, setDepartment] = useState('ฝ่ายวิชาการ');
   const [title, setTitle] = useState('');
+
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'error' | 'success';
+    onConfirm?: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+
+  const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+    setModalConfig({ isOpen: true, title, message, type, onConfirm });
+  };
 
   const updateItem = (id: string, field: keyof PRItem, value: any) => {
     setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
@@ -33,7 +51,7 @@ const Expenditure: React.FC = () => {
 
   const handleCreatePR = async () => {
     if (!title || total === 0) {
-      alert("กรุณาระบุหัวข้อรายการและเพิ่มสินค้าอย่างน้อย 1 รายการ");
+      showAlert("ข้อมูลไม่ครบถ้วน", "กรุณาระบุหัวข้อรายการและเพิ่มสินค้าอย่างน้อย 1 รายการ", "warning");
       return;
     }
 
@@ -50,7 +68,7 @@ const Expenditure: React.FC = () => {
       type: 'purchase'
     });
 
-    alert("บันทึกใบขอซื้อเรียบร้อย! รายการถูกส่งไปรออนุมัติที่หน้า Dashboard");
+    showAlert("สำเร็จ", "บันทึกใบขอซื้อเรียบร้อย! รายการถูกส่งไปรออนุมัติที่หน้า Dashboard", "success");
 
     // 2. Generate PDF
     await generatePDF(newPRId);
@@ -129,7 +147,7 @@ const Expenditure: React.FC = () => {
 
     } catch (e) {
       console.error(e);
-      alert('Error generating PR PDF');
+      showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการสร้างเอกสาร PDF', 'error');
     }
   };
 
@@ -282,6 +300,19 @@ const Expenditure: React.FC = () => {
         </div>
 
       </div>
+
+      <ConfirmModal
+        isOpen={modalConfig.isOpen}
+        onConfirm={() => {
+          if (modalConfig.onConfirm) modalConfig.onConfirm();
+          setModalConfig(prev => ({ ...prev, isOpen: false }));
+        }}
+        onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+        showCancel={!!modalConfig.onConfirm}
+      />
     </div>
   );
 };

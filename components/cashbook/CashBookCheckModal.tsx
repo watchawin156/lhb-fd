@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { FUND_TYPE_OPTIONS } from '../../utils';
 import { fmtShort, fmtMoney } from './utils';
 import { useSchoolData } from '../../context/SchoolContext';
+import ConfirmModal from '../ConfirmModal';
 
 interface CashBookCheckModalProps {
     isOpen: boolean;
@@ -11,6 +12,23 @@ interface CashBookCheckModalProps {
 
 const CashBookCheckModal: React.FC<CashBookCheckModalProps> = ({ isOpen, onClose, fyBE }) => {
     const { transactions, editTransaction } = useSchoolData();
+
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
 
     const { flaggedTxs, validCount } = useMemo(() => {
         const fyCE = fyBE - 543;
@@ -56,7 +74,7 @@ const CashBookCheckModal: React.FC<CashBookCheckModalProps> = ({ isOpen, onClose
                 editTransaction(t.id, { ...t, fundType: f.suggestFund });
             }
         });
-        alert(`แก้ไขอัตโนมัติ ${flaggedTxs.length} รายการสำเร็จ!`);
+        showAlert('สำเร็จ', `แก้ไขอัตโนมัติ ${flaggedTxs.length} รายการสำเร็จ!`, 'success');
     };
 
     if (!isOpen) return null;
@@ -171,6 +189,19 @@ const CashBookCheckModal: React.FC<CashBookCheckModalProps> = ({ isOpen, onClose
                     )}
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
         </div>
     );
 };

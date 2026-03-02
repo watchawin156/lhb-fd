@@ -121,7 +121,7 @@ export async function buildLoanDocPDF(
     y = drawParagraph(schoolName, mL + 62, y, contentWidth - 62, 16, false);
 
     drawText('ที่', mL, y, 16, true);
-    drawText('....................................................', mL + 18, y, 16, false);
+    drawText(loan.id || '-', mL + 18, y, 16, false); // แสดงเลขที่เอกสารจริง
     drawText('วันที่', W - 180, y, 16, true);
     drawText(formatThaiDate(todayDate), W - 118, y, 16, false);
     y -= 24;
@@ -139,7 +139,7 @@ export async function buildLoanDocPDF(
     drawText('เรื่องเดิม', mL + 28, y, 16, true);
     y -= 24;
     y = drawParagraph(
-        'ตามที่โรงเรียนได้ดำเนินกิจกรรมการจัดการเรียนการสอนและการบริหารทั่วไปประจำปีการศึกษานั้น',
+        '       ตามที่โรงเรียนได้ดำเนินกิจกรรมการจัดการเรียนการสอนและการบริหารทั่วไปประจำปีการศึกษานั้น', // เพิ่ม Tab (Space 7)
         mL,
         y,
         contentWidth,
@@ -151,11 +151,11 @@ export async function buildLoanDocPDF(
     drawText('ข้อเท็จจริง', mL + 28, y, 16, true);
     y -= 24;
     const fact1 = isReturn
-        ? 'บัดนี้มีการคืนเงินยืมตามขั้นตอนทางการเงินและบัญชี เพื่อให้ถูกต้องตามระเบียบของทางราชการ'
-        : `เนื่องจากกิจกรรม ${project} มีเงินไม่เพียงพอ จึงจำเป็นต้องยืมเงินจาก ${fromFund}`;
+        ? `       บัดนี้มีการคืนเงินยืม กิจกรรม ${project} ตามขั้นตอนทางการเงินและบัญชี เพื่อให้ถูกต้องตามระเบียบของทางราชการ`
+        : `       เนื่องจากกิจกรรม ${project} มีเงินไม่เพียงพอ จึงจำเป็นต้องยืมเงินจาก ${fromFund}`;
     const fact2 = isReturn
-        ? 'โดยมีรายละเอียดการคืนเงินยืมดังนี้'
-        : 'โดยมีรายละเอียดเงินยืมดังนี้';
+        ? '       โดยมีรายละเอียดการคืนเงินยืมดังนี้'
+        : '       โดยมีรายละเอียดเงินยืมดังนี้';
 
     y = drawParagraph(fact1, mL, y, contentWidth, 16, false);
     y = drawParagraph(fact2, mL, y, contentWidth, 16, false);
@@ -169,9 +169,9 @@ export async function buildLoanDocPDF(
 
     drawText('ข้อเสนอแนะเพื่อโปรดพิจารณา', mL + 28, y, 16, true);
     y -= 24;
-    y = drawParagraph('๑. เพื่อโปรดทราบและพิจารณาอนุมัติ', mL + 12, y, contentWidth - 12, 16, false);
-    y = drawParagraph('๒. แจ้งงานบัญชีเพื่อทราบและลงบัญชีต่อไป', mL + 12, y, contentWidth - 12, 16, false);
-    y = drawParagraph('จึงเรียนมาเพื่อโปรดทราบและพิจารณาอนุมัติ', mL + 12, y, contentWidth - 12, 16, false);
+    y = drawParagraph('       ๑. เพื่อโปรดทราบและพิจารณาอนุมัติ', mL, y, contentWidth, 16, false);
+    y = drawParagraph('       ๒. แจ้งงานบัญชีเพื่อทราบและลงบัญชีต่อไป', mL, y, contentWidth, 16, false);
+    y = drawParagraph('       จึงเรียนมาเพื่อโปรดทราบและพิจารณาอนุมัติ', mL, y, contentWidth, 16, false);
 
     ensureSpace(280);
     y -= 26;

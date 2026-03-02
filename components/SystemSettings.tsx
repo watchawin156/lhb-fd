@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useSchoolData } from '../context/SchoolContext';
 import { generateFullBackupZip, BackupProgress } from '../lib/backupZipGenerator';
+import ConfirmModal from './ConfirmModal';
 
 const SystemSettings: React.FC = () => {
     const { transactions, schoolSettings, updateSchoolSettings } = useSchoolData();
@@ -24,6 +25,24 @@ const SystemSettings: React.FC = () => {
         borrowPrefix: '',
         returnPrefix: ''
     });
+
+    // Modal Notifications
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
 
     useEffect(() => {
         if (schoolSettings.docNumberSettings) {
@@ -90,39 +109,38 @@ const SystemSettings: React.FC = () => {
     const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!confirm(`ยืนยัน Restore จากไฟล์ "${file.name}"?\n\n⚠️ ข้อมูลปัจจุบันจะถูกแทนที่ทั้งหมด`)) {
-            e.target.value = '';
-            return;
-        }
-        setRestoreStatus('loading');
-        setRestoreMsg('');
-        try {
-            const text = await file.text();
-            const json = JSON.parse(text);
-            const res = await fetch('/api/backup', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(json),
-            });
-            const data = await res.json();
-            if (data.success) {
-                setRestoreStatus('ok');
-                setRestoreMsg(`✅ Restore สำเร็จ! ${data.restored} รายการ — กำลังรีโหลด...`);
-                setTimeout(() => window.location.reload(), 1800);
-            } else {
+
+        showAlert('ยืนยันระบบ', `ยืนยันการกู้คืนข้อมูล (Restore) จากไฟล์ "${file.name}"?\n\n⚠️ ข้อมูลปัจจุบันทั้งหมดจะถูกแทนที่และไม่สามารถย้อนคืนได้`, 'warning', async () => {
+            setRestoreStatus('loading');
+            setRestoreMsg('');
+            try {
+                const text = await file.text();
+                const json = JSON.parse(text);
+                const res = await fetch('/api/backup', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(json),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setRestoreStatus('ok');
+                    setRestoreMsg(`✅ Restore สำเร็จ! ${data.restored} รายการ — กำลังรีโหลด...`);
+                    setTimeout(() => window.location.reload(), 1800);
+                } else {
+                    setRestoreStatus('err');
+                    setRestoreMsg(`❌ ${data.error || 'เกิดข้อผิดพลาด'}`);
+                }
+            } catch (err: any) {
                 setRestoreStatus('err');
-                setRestoreMsg(`❌ ${data.error || 'เกิดข้อผิดพลาด'}`);
+                setRestoreMsg(`❌ ${err.message}`);
             }
-        } catch (err: any) {
-            setRestoreStatus('err');
-            setRestoreMsg(`❌ ${err.message}`);
-        }
+        });
         e.target.value = '';
     };
 
     const handleSaveDocSettings = async () => {
         await updateSchoolSettings({ docNumberSettings: docPrefixes });
-        alert('บันทึกการตั้งค่าเลขที่เอกสารอัตโนมัติสำเร็จแล้ว');
+        showAlert('บันทึกสำเร็จ', 'ตั้งค่าเลขที่เอกสารอัตโนมัติเรียบร้อยแล้ว', 'success');
         setIsDocNumModalOpen(false);
     };
 
@@ -385,6 +403,19 @@ const SystemSettings: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
         </div>
     );
 };

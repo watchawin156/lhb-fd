@@ -32,7 +32,7 @@ export const formatThaiDate = (dateInput: string | Date | undefined | null): str
     return String(dateInput);
   }
 
-  const day = date.getDate().toString().padStart(2, '0');
+  const day = date.getDate(); // ตัด .toString().padStart(2, '0') ออก
   const month = date.getMonth();
   const year = date.getFullYear() + 543;
 

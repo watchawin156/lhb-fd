@@ -6,6 +6,7 @@ import ThaiDatePicker from './ThaiDatePicker';
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { PDF_FONTS } from './pdfConfig';
+import ConfirmModal from './ConfirmModal';
 
 interface DailyReportProps {
     initialDate?: string;
@@ -239,13 +240,30 @@ export const generateDailyReportPDF = async (reportDate: string, schoolSettings:
         window.open(URL.createObjectURL(blob), '_blank');
     } catch (error) {
         console.error("PDF Error", error);
-        alert("ไม่สามารถสร้าง PDF ได้");
+        throw new Error("ไม่สามารถสร้าง PDF ได้");
     }
 };
 
 const DailyReport: React.FC<DailyReportProps> = ({ initialDate }) => {
     const [reportDate, setReportDate] = useState(initialDate || new Date().toISOString().split('T')[0]);
     const { schoolSettings, transactions } = useSchoolData();
+
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
 
     // Get active dates (dates with transactions)
     const activeDates = useMemo(() => {
@@ -315,8 +333,12 @@ const DailyReport: React.FC<DailyReportProps> = ({ initialDate }) => {
         return { baht: parseInt(parts[0]).toLocaleString(), satang: parts[1] };
     };
 
-    const handlePrintPDF = () => {
-        generateDailyReportPDF(reportDate, schoolSettings, transactions);
+    const handlePrintPDF = async () => {
+        try {
+            await generateDailyReportPDF(reportDate, schoolSettings, transactions);
+        } catch (e: any) {
+            showAlert('ข้อผิดพลาด', e.message, 'error');
+        }
     };
 
     return (
@@ -443,6 +465,18 @@ const DailyReport: React.FC<DailyReportProps> = ({ initialDate }) => {
                 </div>
             </div>
 
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
         </div>
     );
 };

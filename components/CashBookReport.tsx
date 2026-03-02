@@ -11,6 +11,7 @@ import CashBookReturnModal from './cashbook/CashBookReturnModal';
 import ThaiDatePicker from './ThaiDatePicker';
 import { FUND_TYPE_OPTIONS } from '../utils';
 import { buildLoanDocPDF } from './loanPdfBuilder';
+import ConfirmModal from './ConfirmModal';
 
 const THAI_MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
@@ -67,6 +68,23 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
     const [isDailyDatePickerOpen, setIsDailyDatePickerOpen] = useState(false);
     const [dailyReportDate, setDailyReportDate] = useState(new Date().toISOString().slice(0, 10));
     const [dailyPickerTempDate, setDailyPickerTempDate] = useState(new Date().toISOString().slice(0, 10));
+
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
 
     // Bank Account Modal
     const [isBankModalOpen, setIsBankModalOpen] = useState(false);
@@ -308,7 +326,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
             );
             openBlob(bytes);
         } catch (err) {
-            alert('เกิดข้อผิดพลาด: ' + String(err));
+            showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาด: ' + String(err), 'error');
         } finally {
             setLoading(false);
         }
@@ -351,7 +369,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
             );
             openBlob(bytes);
         } catch (err) {
-            alert('เกิดข้อผิดพลาดในการสร้าง PDF หน้าปก: ' + String(err));
+            showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการสร้าง PDF หน้าปก: ' + String(err), 'error');
         } finally {
             setLoading(false);
         }
@@ -431,7 +449,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
         const itemsToCarry = carryForwardItems.filter(item => item.balance > 0 && !carriedFundTypes.has(item.fundType));
 
         if (itemsToCarry.length === 0) {
-            alert('ไม่มีรายการใหม่ให้ยกยอด (ทุกประเภทนำเข้าแล้ว หรือยอด = 0)');
+            showAlert('ไม่พบรายการ', 'ไม่มีรายการใหม่ให้ยกยอด (ทุกประเภทนำเข้าแล้ว หรือยอด = 0)', 'warning');
             return;
         }
 
@@ -449,7 +467,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
         });
 
         setIsCarryForwardOpen(false);
-        alert(`เพิ่มรายการยกยอดมา ${itemsToCarry.length} รายการ รวมยอด ${fmtMoney(itemsToCarry.reduce((s, i) => s + i.balance, 0))} บาท สำเร็จ`);
+        showAlert('สำเร็จ', `เพิ่มรายการยกยอดมา ${itemsToCarry.length} รายการ รวมยอด ${fmtMoney(itemsToCarry.reduce((s, i) => s + i.balance, 0))} บาท สำเร็จ`, 'success');
     };
 
     const handleAddManualFund = () => {
@@ -457,7 +475,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
         const usedFunds = carryForwardItems.map(i => i.fundType);
         const available = FUND_TYPE_OPTIONS.filter(o => !usedFunds.includes(o.value));
         if (available.length === 0) {
-            alert('เพิ่มครบทุกหมวดเงินแล้ว');
+            showAlert('ครบถ้วน', 'เพิ่มครบทุกหมวดเงินแล้ว', 'info');
             return;
         }
         setCarryForwardItems(prev => [...prev, {
@@ -769,7 +787,7 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                                                         const blob = new Blob([bytes as any], { type: 'application/pdf' });
                                                         window.open(URL.createObjectURL(blob), '_blank');
                                                     } catch (err) {
-                                                        alert('เกิดข้อผิดพลาดในการสร้าง PDF ไฟล์แนบ');
+                                                        showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการสร้าง PDF ไฟล์แนบ', 'error');
                                                     }
                                                 };
 

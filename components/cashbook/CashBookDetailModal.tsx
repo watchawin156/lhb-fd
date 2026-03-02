@@ -3,6 +3,8 @@ import { useSchoolData } from '../../context/SchoolContext';
 import { FUND_TYPE_OPTIONS } from '../../utils';
 import { buildLoanDocPDF, openBlob } from '../loanPdfBuilder';
 import { fmtMoney, fmtShort } from './utils';
+import DeleteConfirmModal from '../DeleteConfirmModal';
+import ConfirmModal from '../ConfirmModal';
 
 interface CashBookDetailModalProps {
     isOpen: boolean;
@@ -40,9 +42,35 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         schoolSettings,
     } = useSchoolData();
 
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
+
     const [isEditingTx, setIsEditingTx] = useState(false);
-    const [showDeletePrompt, setShowDeletePrompt] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState('');
+    const [deleteModalConfig, setDeleteModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: (reason: string) => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { }
+    });
     const [editTxData, setEditTxData] = useState({
         date: '',
         docNo: '',
@@ -222,7 +250,7 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
     const hasReturnHistory = repaymentHistoryForUI.length > 0;
 
     useEffect(() => {
-        if (isOpen && selectedTx && !isEditingTx && !showDeletePrompt) {
+        if (isOpen && selectedTx && !isEditingTx && !deleteModalConfig.isOpen) {
             setEditTxData({
                 date: selectedTx.date,
                 docNo: selectedTx.docNo || '',
@@ -234,7 +262,7 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                 bankId: selectedTx.bankId || '',
             });
         }
-    }, [isOpen, selectedTx, isEditingTx, showDeletePrompt]);
+    }, [isOpen, selectedTx, isEditingTx, deleteModalConfig.isOpen]);
 
     if (!isOpen || !selectedTx) return null;
 
@@ -255,29 +283,27 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
         onClose();
     };
 
-    const handleDelete = async () => {
-        await deleteTransaction(selectedTx.id, 'ลบรายการจากสมุดเงินสด');
-        setShowDeletePrompt(false);
-        setDeleteConfirm('');
+    const handleDelete = async (reason: string) => {
+        await deleteTransaction(selectedTx.id, `ลบจากสมุดเงินสด: ${reason}`);
+        setDeleteModalConfig(prev => ({ ...prev, isOpen: false }));
         onClose();
     };
 
     const handleClose = () => {
         setIsEditingTx(false);
-        setShowDeletePrompt(false);
-        setDeleteConfirm('');
+        setDeleteModalConfig(prev => ({ ...prev, isOpen: false }));
         onClose();
     };
 
     const handleOpenLoanPDF = async (isReturn: boolean, overrideAmount?: number, overrideDate?: string) => {
         if (!linkedLoan) {
-            alert('ไม่พบสัญญายืมที่เกี่ยวข้อง');
+            showAlert('ไม่พบข้อมูล', 'ไม่พบสัญญายืมที่เกี่ยวข้อง', 'warning');
             return;
         }
 
         const amountForDoc = overrideAmount ?? (isReturn ? (returnDocData?.amount || 0) : linkedLoan.amount);
         if (isReturn && amountForDoc <= 0) {
-            alert('ยังไม่มีข้อมูลการคืนเงินสำหรับพิมพ์เอกสาร');
+            showAlert('ไม่พบข้อมูล', 'ยังไม่มีข้อมูลการคืนเงินสำหรับพิมพ์เอกสาร', 'warning');
             return;
         }
 
@@ -295,7 +321,7 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
             openBlob(pdfBytes);
         } catch (e) {
             console.warn('failed to generate loan pdf', e);
-            alert('สร้างเอกสาร PDF ไม่สำเร็จ');
+            showAlert('ข้อผิดพลาด', 'สร้างเอกสาร PDF ไม่สำเร็จ', 'error');
         }
     };
 
@@ -483,7 +509,14 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                                 <span className="material-symbols-outlined text-base">edit</span> แก้ไข
                             </button>
                             <button
-                                onClick={() => setShowDeletePrompt(true)}
+                                onClick={() => {
+                                    setDeleteModalConfig({
+                                        isOpen: true,
+                                        title: 'ยืนยันการลบรายการ',
+                                        message: `คุณยืนยันที่จะลบรายการ "${selectedTx.description}" วันที่ ${fmtShort(selectedTx.date)} หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้`,
+                                        onConfirm: handleDelete
+                                    });
+                                }}
                                 className="flex-1 min-w-[48%] py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 flex items-center justify-center gap-1"
                             >
                                 <span className="material-symbols-outlined text-base">delete</span> ลบ
@@ -491,39 +524,33 @@ const CashBookDetailModal: React.FC<CashBookDetailModalProps> = ({ isOpen, onClo
                         </div>
                     </div>
                 )}
-
-                {showDeletePrompt && !isEditingTx && (
-                    <div className="px-6 pb-5 border-t border-gray-100 pt-4">
-                        <p className="text-sm text-red-600 font-semibold mb-2">ยืนยันการลบรายการ</p>
-                        <p className="text-xs text-gray-500 mb-3">พิมพ์ <span className="font-bold text-red-600">"ยืนยัน"</span> เพื่อยืนยันการลบ</p>
-                        <input
-                            type="text"
-                            value={deleteConfirm}
-                            onChange={e => setDeleteConfirm(e.target.value)}
-                            className="w-full px-3 py-2 rounded-xl border border-red-200 text-sm outline-none focus:border-red-400 mb-3"
-                            placeholder='พิมพ์ "ยืนยัน"'
-                        />
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => { setShowDeletePrompt(false); setDeleteConfirm(''); }}
-                                className="flex-1 py-2 rounded-xl text-sm font-medium text-gray-500 bg-gray-100 hover:bg-gray-200"
-                            >
-                                ยกเลิก
-                            </button>
-                            <button
-                                disabled={deleteConfirm !== 'ยืนยัน'}
-                                onClick={handleDelete}
-                                className={`flex-[2] py-2 rounded-xl text-sm font-semibold text-white transition-all ${deleteConfirm === 'ยืนยัน' ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-300 cursor-not-allowed'}`}
-                            >
-                                ลบรายการ
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
+
+            <DeleteConfirmModal
+                isOpen={deleteModalConfig.isOpen}
+                title={deleteModalConfig.title}
+                message={deleteModalConfig.message}
+                onCancel={() => setDeleteModalConfig(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={(reason) => {
+                    deleteModalConfig.onConfirm(reason);
+                }}
+            />
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
+
         </div>
     );
 };
 
 export default CashBookDetailModal;
-

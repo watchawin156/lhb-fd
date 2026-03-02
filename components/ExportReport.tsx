@@ -4,6 +4,7 @@ import { useSchoolData } from '../context/SchoolContext';
 import * as XLSX from 'xlsx';
 import { formatThaiDate } from '../utils';
 import { buildDailyPDF, buildCoverPDF, buildCashBookPDF, openBlob } from './exportReportBuilders';
+import ConfirmModal from './ConfirmModal';
 
 // ─────────────────────────────────────────────
 // Font CDN
@@ -47,6 +48,23 @@ const ExportReport: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState('');
+
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
 
     const toggle = (id: string) =>
         setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -207,7 +225,7 @@ const ExportReport: React.FC = () => {
                 openBlob(bytes);
             }
         } catch (err) {
-            alert('เกิดข้อผิดพลาด: ' + String(err));
+            showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาด: ' + String(err), 'error');
         } finally {
             setLoading(false); setProgress('');
         }
@@ -394,6 +412,19 @@ const ExportReport: React.FC = () => {
                     ))}
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
         </div>
     );
 };

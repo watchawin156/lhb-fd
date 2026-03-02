@@ -3,6 +3,7 @@ import { useSchoolData } from '../../context/SchoolContext';
 import { FUND_TYPE_OPTIONS } from '../../utils';
 import { buildLoanDocPDF, openBlob } from '../loanPdfBuilder';
 import { fmtMoney } from './utils';
+import ConfirmModal from '../ConfirmModal';
 
 interface BorrowModalProps {
     isOpen: boolean;
@@ -19,6 +20,23 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
     const [borrowPurpose, setBorrowPurpose] = useState('');
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'info' | 'warning' | 'error' | 'success';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    const showAlert = (title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', onConfirm?: () => void) => {
+        setModalConfig({ isOpen: true, title, message, type, onConfirm });
+    };
 
     // Calculate bank account balances
     const bankBalances = useMemo(() => {
@@ -41,17 +59,17 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
 
     const handleCreateLoan = async () => {
         if (!selectedBankId) {
-            alert('กรุณาเลือกบัญชีเงินฝากที่ต้องการยืม');
+            showAlert('กรุณากรอกข้อมูล', 'กรุณาเลือกบัญชีเงินฝากที่ต้องการยืม', 'warning');
             return;
         }
 
         if (!borrowAmountNum || borrowAmountNum <= 0) {
-            alert('กรุณากรอกจำนวนเงิน');
+            showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกจำนวนเงิน', 'warning');
             return;
         }
 
         if (!borrowPurpose) {
-            alert('กรุณากรอกวัตถุประสงค์การยืม');
+            showAlert('กรุณากรอกข้อมูล', 'กรุณากรอกวัตถุประสงค์การยืม', 'warning');
             return;
         }
 
@@ -103,7 +121,7 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
         } catch (e) {
             console.warn('Error creating loan', e);
             setIsGeneratingPDF(false);
-            alert('เกิดข้อผิดพลาดในการสร้างสัญญา: ' + String(e));
+            showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการสร้างสัญญา: ' + String(e), 'error');
         }
     };
 
@@ -331,6 +349,19 @@ const BorrowModal: React.FC<BorrowModalProps> = ({ isOpen, onClose, needAmount =
                     </button>
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
         </div>
     );
 };

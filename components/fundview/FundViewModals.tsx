@@ -3,23 +3,21 @@ import { formatThaiDate } from '../../utils';
 import { Transaction } from '../../types';
 import ThaiDatePicker from '../ThaiDatePicker';
 import { parseDateInput } from './FundViewTypes';
+import DeleteConfirmModal from '../DeleteConfirmModal';
 
 interface FundViewModalsProps {
     // Detail modal
     isDetailModalOpen: boolean;
     selectedTx: Transaction | null;
     isEditing: boolean;
-    isDeleting: boolean;
-    deleteConfirmation: string;
+    deleteModalConfig: { isOpen: boolean, title: string, message: string, onConfirm: (reason: string) => void };
+    setDeleteModalConfig: React.Dispatch<React.SetStateAction<{ isOpen: boolean, title: string, message: string, onConfirm: (reason: string) => void }>>;
     editFormData: Partial<Transaction>;
     onCloseDetail: () => void;
     onStartEdit: () => void;
     onSaveEdit: () => void;
     onCancelEdit: () => void;
-    onStartDelete: () => void;
-    onCancelDelete: () => void;
-    onConfirmDelete: () => void;
-    onDeleteConfirmationChange: (v: string) => void;
+    onConfirmDelete: (reason: string) => void;
     onEditChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
     onEditDateChange: (date: string) => void;
     // Export modal
@@ -32,10 +30,9 @@ interface FundViewModalsProps {
 }
 
 const FundViewModals: React.FC<FundViewModalsProps> = ({
-    isDetailModalOpen, selectedTx, isEditing, isDeleting, deleteConfirmation,
-    editFormData, onCloseDetail, onStartEdit, onSaveEdit, onCancelEdit,
-    onStartDelete, onCancelDelete, onConfirmDelete,
-    onDeleteConfirmationChange, onEditChange, onEditDateChange,
+    isDetailModalOpen, selectedTx, isEditing, deleteModalConfig, setDeleteModalConfig,
+    editFormData, onCloseDetail, onStartEdit, onSaveEdit, onCancelEdit, onConfirmDelete,
+    onEditChange, onEditDateChange,
     isExportModalOpen, exportFormat, exportDateInput,
     onCloseExport, onExportDateChange, onExportConfirm
 }) => {
@@ -86,7 +83,7 @@ const FundViewModals: React.FC<FundViewModalsProps> = ({
                                     <button onClick={onSaveEdit} className="flex-[2] py-2 rounded-xl text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600">บันทึก</button>
                                 </div>
                             </div>
-                        ) : !isDeleting ? (
+                        ) : (
                             <div className="px-6 pb-4">
                                 <div className="space-y-2 mb-4">
                                     {[
@@ -106,24 +103,15 @@ const FundViewModals: React.FC<FundViewModalsProps> = ({
                                     <button onClick={onStartEdit} className="flex-1 py-2 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 flex items-center justify-center gap-1">
                                         <span className="material-symbols-outlined text-base">edit</span> แก้ไข
                                     </button>
-                                    <button onClick={onStartDelete} className="flex-1 py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 flex items-center justify-center gap-1">
+                                    <button onClick={() => {
+                                        setDeleteModalConfig({
+                                            isOpen: true,
+                                            title: 'ยืนยันการลบรายการ',
+                                            message: `คุณยืนยันที่จะลบรายการ "${selectedTx.description}" วันที่ ${formatThaiDate(selectedTx.date)} หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้`,
+                                            onConfirm: onConfirmDelete
+                                        });
+                                    }} className="flex-1 py-2 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 flex items-center justify-center gap-1">
                                         <span className="material-symbols-outlined text-base">delete</span> ลบ
-                                    </button>
-                                </div>
-                            </div>
-                        ) : null}
-                        {isDeleting && !isEditing && (
-                            <div className="px-6 pb-5 border-t border-gray-100 pt-4">
-                                <p className="text-sm text-red-600 font-semibold mb-2">⚠️ ยืนยันการลบรายการ</p>
-                                <p className="text-xs text-gray-500 mb-3">พิมพ์ <span className="font-bold text-red-600">"ยืนยัน"</span> เพื่อยืนยันการลบ</p>
-                                <input type="text" value={deleteConfirmation} onChange={e => onDeleteConfirmationChange(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-xl border border-red-200 text-sm outline-none focus:border-red-400 mb-3"
-                                    placeholder='พิมพ์ "ยืนยัน"' />
-                                <div className="flex gap-2">
-                                    <button onClick={onCancelDelete} className="flex-1 py-2 rounded-xl text-sm font-medium text-gray-500 bg-gray-100 hover:bg-gray-200">ยกเลิก</button>
-                                    <button onClick={onConfirmDelete} disabled={deleteConfirmation !== 'ยืนยัน'}
-                                        className={`flex-[2] py-2 rounded-xl text-sm font-semibold text-white transition-all ${deleteConfirmation === 'ยืนยัน' ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-300 cursor-not-allowed'}`}>
-                                        ลบรายการ
                                     </button>
                                 </div>
                             </div>
@@ -131,6 +119,16 @@ const FundViewModals: React.FC<FundViewModalsProps> = ({
                     </div>
                 </div>
             )}
+
+            <DeleteConfirmModal
+                isOpen={deleteModalConfig.isOpen}
+                title={deleteModalConfig.title}
+                message={deleteModalConfig.message}
+                onCancel={() => setDeleteModalConfig(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={(reason) => {
+                    deleteModalConfig.onConfirm(reason);
+                }}
+            />
 
             {/* Export Date Modal */}
             {isExportModalOpen && (
