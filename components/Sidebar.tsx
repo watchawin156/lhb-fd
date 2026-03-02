@@ -57,10 +57,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userRole, isS
       )}
 
       <aside className={`
-        fixed inset-y-0 left-0 z-50 bg-surface dark:bg-surface-dark border-r border-border-light dark:border-border-dark 
-        flex flex-col py-6 h-screen shrink-0 transition-all duration-300 overflow-y-auto custom-scrollbar
+        fixed inset-y-0 left-0 z-50 glass border-r border-white/10
+        flex flex-col py-6 h-screen shrink-0 transition-all duration-500 ease-in-out overflow-y-auto nav-scroll
         md:translate-x-0 md:static md:z-auto
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
         ${isCollapsed ? 'w-20 items-center' : 'w-72'}
       `}>
         {/* Logo */}
@@ -86,30 +86,24 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userRole, isS
 
           {/* Fiscal Year Selector */}
           {!isCollapsed && onFiscalYearChange && (
-            <div className="mx-3 mb-4 mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 animate-fade-in">
-              <label className="text-xs font-semibold text-blue-600 dark:text-blue-400 block mb-1.5 flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">calendar_today</span>
+            <div className="mx-3 mb-6 mt-2 p-4 glass-card border-none animate-fade-in bg-primary/5 dark:bg-primary/10">
+              <label className="text-[10px] font-black uppercase tracking-widest text-primary/60 dark:text-primary/40 block mb-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[14px]">event_note</span>
                 ปีงบประมาณ
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button onClick={() => onFiscalYearChange((selectedFiscalYear || getCurrentFY()) - 1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-surface-dark border border-blue-200 dark:border-blue-700 text-blue-600 hover:bg-blue-100 transition-colors text-sm font-bold">
-                  ‹
+                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 shadow-sm text-primary hover:bg-primary hover:text-white transition-all duration-200 active:scale-90">
+                  <span className="material-symbols-outlined text-sm">chevron_left</span>
                 </button>
-                <span className="flex-1 text-center text-sm font-bold text-blue-700 dark:text-blue-300">
-                  พ.ศ. {selectedFiscalYear || getCurrentFY()}
+                <span className="flex-1 text-center text-base font-black text-slate-800 dark:text-white">
+                  {selectedFiscalYear || getCurrentFY()}
                 </span>
                 <button onClick={() => onFiscalYearChange((selectedFiscalYear || getCurrentFY()) + 1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-surface-dark border border-blue-200 dark:border-blue-700 text-blue-600 hover:bg-blue-100 transition-colors text-sm font-bold">
-                  ›
+                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 shadow-sm text-primary hover:bg-primary hover:text-white transition-all duration-200 active:scale-90">
+                  <span className="material-symbols-outlined text-sm">chevron_right</span>
                 </button>
               </div>
-              {(selectedFiscalYear !== getCurrentFY()) && (
-                <button onClick={() => onFiscalYearChange(getCurrentFY())}
-                  className="mt-1.5 w-full text-xs text-blue-500 hover:text-blue-700 underline text-center">
-                  กลับปีปัจจุบัน
-                </button>
-              )}
             </div>
           )}
           {isCollapsed && onFiscalYearChange && (
@@ -311,16 +305,19 @@ interface NavItemProps {
 }
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick, isCollapsed }) => {
-  const baseClasses = `group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 font-medium text-sm cursor-pointer w-full text-left ${isCollapsed ? 'justify-center' : ''}`;
-  const activeClasses = "bg-primary text-white shadow-md shadow-blue-500/20";
-  const inactiveClasses = "hover:bg-gray-100 dark:hover:bg-white/5 text-text-muted dark:text-text-muted-dark hover:text-primary dark:hover:text-white";
+  const baseClasses = `group flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 font-bold text-sm cursor-pointer w-full text-left relative overflow-hidden ${isCollapsed ? 'justify-center' : ''}`;
+  const activeClasses = "bg-primary text-white shadow-lg shadow-primary/30 active:scale-[0.98]";
+  const inactiveClasses = "text-slate-500 dark:text-slate-400 hover:text-primary dark:hover:text-white hover:bg-primary/5 dark:hover:bg-white/5 active:scale-[0.98]";
 
   return (
     <button onClick={onClick} className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses}`} title={isCollapsed ? label : ''}>
-      <span className={`material-symbols-outlined ${isActive ? 'filled' : ''} shrink-0`} style={{ fontSize: '20px' }}>
+      {isActive && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-white rounded-r-full"></span>
+      )}
+      <span className={`material-symbols-outlined ${isActive ? 'filled' : ''} shrink-0 text-[22px]`}>
         {icon}
       </span>
-      {!isCollapsed && <span className="truncate">{label}</span>}
+      {!isCollapsed && <span className="truncate tracking-tight">{label}</span>}
     </button>
   );
 };

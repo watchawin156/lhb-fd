@@ -333,11 +333,25 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
             const baseId = Date.now();
             const loanDocNo = getNextDocNo('borrow', currentFiscalYear);
-            const order = schoolSettings.borrowOrder || 'borrow-first';
 
-            // 1. Borrow In (รับเงินยืม)
+            // Order: 1. ยืมเงิน -> 2. รับเงินยืม (Top to Bottom in Latest First)
+            // 1. Lend Out (ขอยืม/ยืมเงิน) -> Highest ID (Top)
+            const expenseTx = {
+                id: baseId + 10,
+                date: today,
+                docNo: loanDocNo,
+                description: `ยืมเงินให้โครงการ/งาน ${borrowPurpose}`,
+                fundType: borrowFromFund,
+                income: 0,
+                expense: borrowAmountNum,
+                loanId,
+                skipLoanCheck: true,
+                bankId: selectedBankId
+            };
+
+            // 2. Borrow In (รับเงินยืม) -> Lowest ID (Bottom)
             const incomeTx = {
-                id: order === 'borrow-first' ? baseId : baseId + 10,
+                id: baseId,
                 date: today,
                 docNo: loanDocNo,
                 description: `รับเงินยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
@@ -349,22 +363,8 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 bankId: selectedBankId
             };
 
-            // 2. Lend Out (ขอยืม)
-            const expenseTx = {
-                id: order === 'borrow-first' ? baseId + 10 : baseId,
-                date: today,
-                docNo: loanDocNo,
-                description: `ขอยืมเพื่อ ${borrowPurpose}`,
-                fundType: borrowFromFund,
-                income: 0,
-                expense: borrowAmountNum,
-                loanId,
-                skipLoanCheck: true,
-                bankId: selectedBankId
-            };
-
-            await addTransaction(incomeTx);
             await addTransaction(expenseTx);
+            await addTransaction(incomeTx);
 
             // Add loan record
             addLoan(newLoan);
@@ -854,823 +854,773 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         setAddBankId('');
     };
 
+    const renderBorrowSection = () => {
+        if (borrowSubmitted) {
+            return (
+                <div className="flex flex-col items-center justify-center py-12 px-6 bg-emerald-50/50 rounded-[32px] border-2 border-dashed border-emerald-200 animate-fade-in">
+                    <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
+                        <span className="material-symbols-outlined text-4xl text-emerald-600">check_circle</span>
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-800 mb-2">บันทึกสัญญายืมเงินสำเร็จ!</h3>
+                    <p className="text-slate-500 font-medium text-center max-w-md">ระบบได้บันทึกรายการยืมเงินและสร้างเอกสารสัญญาเรียบร้อยแล้ว ท่านสามารถดาวน์โหลดไฟล์ PDF ได้จากปุ่มด้านล่าง</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-fade-in">
+                <div className="space-y-6">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">โครงการ / วัตถุประสงค์การยืม</label>
+                        <div className="relative">
+                            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">description</span>
+                            <input
+                                type="text" value={borrowPurpose} onChange={(e) => setBorrowPurpose(e.target.value)}
+                                placeholder="เช่น เพื่อจัดซื้อวัตถุดิบอาหารกลางวัน..."
+                                className="modern-input pl-12"
+                            />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">ยืมจากกองทุน</label>
+                        <select
+                            value={borrowFromFund} onChange={(e) => setBorrowFromFund(e.target.value)}
+                            className="modern-input font-bold"
+                        >
+                            <option value="">-- เลือกกองทุนต้นทาง --</option>
+                            {FUND_TYPE_OPTIONS.filter(f => !f.value.includes('loan') && f.value !== borrowPurpose).map(f => (
+                                <option key={f.value} value={f.value}>{f.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                <div className="glass-card p-8 flex flex-col justify-center items-center gap-4 bg-primary/5 border-primary/20">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-primary">จำนวนเงินที่ต้องการยืม</label>
+                    <div className="flex items-baseline gap-3">
+                        <span className="text-slate-400 font-black text-2xl">฿</span>
+                        <input
+                            type="number" value={borrowAmount} onChange={(e) => setBorrowAmount(e.target.value)}
+                            placeholder="0.00"
+                            className="bg-transparent text-5xl font-black text-slate-800 outline-none w-48 text-center placeholder:text-slate-200"
+                        />
+                    </div>
+                    {borrowFromFund && (
+                        <div className="px-4 py-2 rounded-full bg-white/50 dark:bg-slate-800/50 text-[11px] font-bold text-slate-500 mt-2">
+                            คงเหลือในกองทุน: <span className="text-primary font-black">{fundBalance.toLocaleString()} บาท</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderMainItemsSection = () => {
+        return (
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                            <span className="material-symbols-outlined text-primary">list_alt</span>
+                            รายการรายละเอียด
+                        </h3>
+                        <p className="text-xs text-slate-400 font-medium tracking-tight">เพิ่มรายการย่อยสำหรับใบสำคัญนี้</p>
+                    </div>
+                    <button
+                        type="button" onClick={addSubItem}
+                        className="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all duration-300 text-sm font-black"
+                    >
+                        <span className="material-symbols-outlined text-lg">add_circle</span>
+                        เพิ่มรายการ
+                    </button>
+                </div>
+
+                <div className="space-y-4">
+                    {subItems.map((item, idx) => (
+                        <div key={item.id} className="group relative glass-card p-5 border-white/40 hover:border-primary/30 transition-all duration-500 animate-fade-in" style={{ animationDelay: `${idx * 0.05}s` }}>
+                            <div className="flex flex-col md:flex-row gap-5">
+                                <div className="flex-1 space-y-2">
+                                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">ชื่อรายการ / รายละเอียด</label>
+                                    <input
+                                        type="text" value={item.description} onChange={(e) => updateSub(item.id, 'description', e.target.value)}
+                                        placeholder="เช่น ค่าวัสดุอุปกรณ์สำนักงาน..."
+                                        className="modern-input font-bold"
+                                    />
+                                </div>
+                                <div className="w-full md:w-48 space-y-2">
+                                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">จำนวนเงิน (บาท)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number" value={item.amount} onChange={(e) => updateSub(item.id, 'amount', e.target.value)}
+                                            placeholder="0.00"
+                                            className={`modern-input text-right font-black ${addTransactionType === 'income' ? 'text-blue-600' : 'text-red-500'}`}
+                                        />
+                                    </div>
+                                </div>
+                                {subItems.length > 1 && (
+                                    <button
+                                        type="button" onClick={() => removeSubItem(item.id)}
+                                        className="absolute -right-3 -top-3 w-8 h-8 rounded-full bg-white dark:bg-slate-800 shadow-lg border border-slate-100 dark:border-white/10 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center scale-90 hover:scale-100"
+                                    >
+                                        <span className="material-symbols-outlined text-base">delete</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="flex justify-between items-center p-6 bg-slate-100 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-white/5">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">ยอดรวมทั้งสิ้น (Total)</div>
+                    <div className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter">
+                        <span className="text-sm font-bold text-slate-400 mr-2">฿</span>
+                        {subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
+                </div>
+
+                {addTransactionType === 'expense' && (
+                    <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5 animate-fade-in">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block text-center mb-4">เลือกประเภทผู้รับเงิน</label>
+                        <div className="flex gap-4 max-w-md mx-auto">
+                            <button
+                                type="button" onClick={() => setAddPayeeType('legal')}
+                                className={`flex-1 py-4 rounded-2xl border-2 transition-all duration-300 font-bold flex flex-col items-center gap-2 ${addPayeeType === 'legal' ? 'bg-primary/5 border-primary text-primary shadow-lg shadow-primary/10' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-white/5 text-slate-400 hover:border-slate-300'}`}
+                            >
+                                <span className="material-symbols-outlined text-2xl">account_balance</span>
+                                <span className="text-xs">นิติบุคคล</span>
+                            </button>
+                            <button
+                                type="button" onClick={() => setAddPayeeType('person')}
+                                className={`flex-1 py-4 rounded-2xl border-2 transition-all duration-300 font-bold flex flex-col items-center gap-2 ${addPayeeType === 'person' ? 'bg-primary/5 border-primary text-primary shadow-lg shadow-primary/10' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-white/5 text-slate-400 hover:border-slate-300'}`}
+                            >
+                                <span className="material-symbols-outlined text-2xl">person</span>
+                                <span className="text-xs">บุคคลธรรมดา</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-[2px] animate-fade-in p-4">
-            <form onSubmit={handleAddSubmit}
-                className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden animate-scale-in border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-fade-in">
+            {/* Background Decorative Blobs */}
+            <div className="absolute top-1/4 -left-20 w-80 h-80 bg-primary/20 rounded-full blur-[120px] pointer-events-none"></div>
+            <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-blue-400/20 rounded-full blur-[120px] pointer-events-none"></div>
 
-                {/* Header */}
-                <div className="px-6 py-4 shrink-0 flex justify-between items-center border-b border-slate-50">
-                    <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${addTransactionType === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
-                            <span className="material-symbols-outlined text-2xl font-black">
-                                {showBorrowMode ? 'currency_exchange' : addTransactionType === 'income' ? 'add_circle' : 'do_not_disturb_on'}
+            <form onSubmit={handleAddSubmit}
+                className="glass-card w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-up border-white/40 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)]">
+
+                {/* Modal Header */}
+                <div className="px-8 py-6 shrink-0 flex justify-between items-center border-b border-white/20 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl">
+                    <div className="flex items-center gap-5">
+                        <div className={`w-14 h-14 rounded-[20px] flex items-center justify-center shadow-inner ${showBorrowMode ? 'bg-primary/20 text-primary' : addTransactionType === 'income' ? 'bg-emerald-500/20 text-emerald-600' : 'bg-rose-500/20 text-rose-600'}`}>
+                            <span className="material-symbols-outlined text-3xl font-black">
+                                {showBorrowMode ? 'currency_exchange' : addTransactionType === 'income' ? 'add_card' : 'payments'}
                             </span>
                         </div>
                         <div>
-                            <h2 className="text-lg font-black text-slate-800 tracking-tight leading-none mb-1">
-                                {showBorrowMode ? 'ขอยืมเงิน' : 'เพิ่มรายการใหม่'}
+                            <h2 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight leading-tight">
+                                {showBorrowMode ? 'ขอยืมเงิน (Loan Request)' : 'บันทึกรายการใหม่'}
                             </h2>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">CASHBOOK ENTRY</p>
+                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none mt-1">Cash Management System • FY {currentFiscalYear}</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+
+                    <div className="flex items-center gap-4">
                         {!showBorrowMode && (
-                            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+                            <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-white/20 backdrop-blur-sm">
                                 <button
-                                    type="button"
-                                    onClick={() => setIsGroupMode(false)}
-                                    className={`px-4 py-1.5 rounded-lg text-[11px] font-black transition-all ${!isGroupMode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                                    type="button" onClick={() => setIsGroupMode(false)}
+                                    className={`px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${!isGroupMode ? 'bg-white dark:bg-slate-700 text-primary shadow-lg shadow-primary/10' : 'text-slate-400 hover:text-slate-600'}`}
                                 >เดี่ยว</button>
                                 <button
-                                    type="button"
-                                    onClick={() => setIsGroupMode(true)}
-                                    className={`px-4 py-1.5 rounded-lg text-[11px] font-black transition-all ${isGroupMode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                                    type="button" onClick={() => setIsGroupMode(true)}
+                                    className={`px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${isGroupMode ? 'bg-white dark:bg-slate-700 text-primary shadow-lg shadow-primary/10' : 'text-slate-400 hover:text-slate-600'}`}
                                 >กลุ่ม</button>
                             </div>
                         )}
-                        <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100">
-                            <span className="material-symbols-outlined text-lg">close</span>
+                        <button type="button" onClick={onClose}
+                            className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white/20 dark:bg-slate-800/20 text-slate-400 hover:bg-rose-500 hover:text-white transition-all duration-300 border border-white/40 group">
+                            <span className="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform duration-500">close</span>
                         </button>
                     </div>
                 </div>
 
-                {/* Scrollable content */}
-                <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar bg-slate-50/30">
+                {/* Modal Body */}
+                <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
                     {/* Top Section: Fund / Bank (Row 1) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        {/* 1. หมวดเงิน */}
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                                1. หมวดเงิน / เลือกประเภทเงิน
-                            </label>
-                            <div className="relative">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsFundDropdownOpen(!isFundDropdownOpen)}
-                                    className={`w-full px-4 py-2.5 rounded-xl border-2 bg-white text-sm font-bold transition-all flex justify-between items-center text-left ${isFundDropdownOpen ? 'border-blue-500 shadow-lg shadow-blue-50' : 'border-slate-100 hover:border-slate-300'}`}
-                                >
-                                    <span className="truncate text-slate-700">
-                                        {FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'คลิกที่นี่เพื่อเลือกหมวดเงิน'}
-                                    </span>
-                                    <span className={`material-symbols-outlined text-slate-300 transition-transform ${isFundDropdownOpen ? 'rotate-180 text-blue-500' : ''}`}>expand_more</span>
-                                </button>
-                                {isFundDropdownOpen && (
-                                    <>
-                                        <div className="fixed inset-0 z-[60]" onClick={() => setIsFundDropdownOpen(false)}></div>
-                                        <div className="absolute top-full left-0 mt-2 w-full bg-white border border-slate-100 rounded-2xl shadow-2xl z-[70] max-h-72 flex flex-col overflow-hidden animate-slide-up">
-                                            <div className="p-3 border-b border-slate-50 bg-slate-50/50">
-                                                <div className="relative">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-sm">search</span>
-                                                    <input
-                                                        type="text" autoFocus placeholder="ค้นหาหมวดเงิน..."
-                                                        value={addFundSearch}
-                                                        onChange={e => setAddFundSearch(e.target.value)}
-                                                        className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400 focus:shadow-sm"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="overflow-y-auto py-2">
-                                                {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => {
-                                                    const filteredOpts = FUND_TYPE_OPTIONS.filter(opt => opt.group === group && opt.label.toLowerCase().includes(addFundSearch.toLowerCase()));
-                                                    if (filteredOpts.length === 0) return null;
-                                                    return (
-                                                        <div key={group}>
-                                                            <div className="px-4 py-1.5 text-[10px] font-black text-slate-400 bg-slate-50/30 uppercase tracking-widest leading-none mt-2 first:mt-0">
-                                                                {group}
-                                                            </div>
-                                                            {filteredOpts.map(opt => (
-                                                                <button
-                                                                    key={opt.value}
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setAddFundType(opt.value);
-                                                                        setIsFundDropdownOpen(false);
-                                                                        setIsEditingFund(false);
-                                                                        setAddFundSearch('');
-                                                                        const autoBank = schoolSettings.bankAccounts?.find(b => b.fundTypes.includes(opt.value));
-                                                                        if (autoBank) setAddBankId(autoBank.id);
-                                                                    }}
-                                                                    className={`w-full text-left px-5 py-2.5 text-xs font-semibold transition-colors flex items-center justify-between ${addFundType === opt.value ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
-                                                                >
-                                                                    {opt.label}
-                                                                    {addFundType === opt.value && <span className="material-symbols-outlined text-sm">check_circle</span>}
-                                                                </button>
-                                                            ))}
+                    {/* Section 1: Core Information */}
+                    {!showBorrowMode && (
+                        <div className="space-y-8 animate-fade-in mb-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* 1. หมวดเงิน */}
+                                <div className="space-y-3">
+                                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm text-primary">category</span>
+                                        1. หมวดเงิน / เลือกประเภทเงิน
+                                    </label>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsFundDropdownOpen(!isFundDropdownOpen)}
+                                            className={`w-full px-5 py-3.5 rounded-2xl border-2 bg-white dark:bg-slate-800 text-sm font-bold transition-all duration-300 flex justify-between items-center text-left ${isFundDropdownOpen ? 'border-primary shadow-lg shadow-primary/10' : 'border-slate-100 dark:border-white/10 hover:border-slate-300'}`}
+                                        >
+                                            <span className="truncate text-slate-700 dark:text-slate-200">
+                                                {FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'คลิกที่นี่เพื่อเลือกหมวดเงิน'}
+                                            </span>
+                                            <span className={`material-symbols-outlined text-slate-300 transition-transform duration-300 ${isFundDropdownOpen ? 'rotate-180 text-primary' : ''}`}>expand_more</span>
+                                        </button>
+                                        {isFundDropdownOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-[60]" onClick={() => setIsFundDropdownOpen(false)}></div>
+                                                <div className="absolute top-full left-0 mt-3 w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/10 rounded-3xl shadow-[0_24px_48px_-12px_rgba(0,0,0,0.15)] z-[70] max-h-[400px] flex flex-col overflow-hidden animate-slide-up backdrop-blur-2xl">
+                                                    <div className="p-4 border-b border-slate-50 dark:border-white/5 bg-slate-50/50 dark:bg-slate-800/50">
+                                                        <div className="relative">
+                                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">search</span>
+                                                            <input
+                                                                type="text" autoFocus placeholder="ค้นหาหมวดเงิน..."
+                                                                value={addFundSearch}
+                                                                onChange={e => setAddFundSearch(e.target.value)}
+                                                                className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-white/10 rounded-2xl text-sm font-black outline-none focus:border-primary transition-all shadow-inner"
+                                                            />
                                                         </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* 2. เลือกบัญชีธนาคาร */}
-                        <div className="space-y-1">
-                            <label className="text-sm font-black text-slate-400 uppercase tracking-widest ml-1">
-                                2. บัญชีธนาคาร
-                            </label>
-                            <select
-                                value={addBankId}
-                                onChange={e => setAddBankId(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-lg font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-emerald-400 focus:shadow-lg focus:shadow-emerald-50 transition-all appearance-none cursor-pointer"
-                            >
-                                <option value="">-- คลิกเลือกบัญชี --</option>
-                                {schoolSettings.bankAccounts?.map(acc => (
-                                    <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        {/* 3. โครงการ / กิจกรรม */}
-                        <div className="space-y-1">
-                            <label className="text-sm font-black text-slate-400 uppercase tracking-widest ml-1">
-                                3. โครงการ / กิจกรรม
-                            </label>
-                            <input
-                                type="text"
-                                value={addProject}
-                                onChange={e => setAddProject(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-lg font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-blue-400 transition-all placeholder:text-slate-300"
-                                placeholder="เช่น กิจกรรมพัฒนาคุณภาพผู้เรียน"
-                            />
-                        </div>
-
-                        {/* 4. วันที่ และ ที่เอกสาร */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <label className="text-sm font-black text-slate-400 uppercase tracking-widest ml-1">
-                                    4. วันที่
-                                </label>
-                                <ThaiDatePicker value={addDate} onChange={(val: string) => setAddDate(val)} />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-sm font-black text-slate-400 uppercase tracking-widest ml-1">
-                                    5. ที่เอกสาร
-                                </label>
-                                <input
-                                    type="text" value={addDocNo}
-                                    onChange={e => setAddDocNo(e.target.value)}
-                                    className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-lg font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-blue-400 transition-all placeholder:text-slate-300"
-                                    placeholder="เลขอ้างอิง"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* === โหมดภาษี 1% - รับ === */}
-                    {addFundType === 'fund-tax' && addTransactionType === 'income' && (
-                        <div className="space-y-3 mt-2">
-                            <div className="bg-orange-50/50 rounded-xl border border-orange-200 p-4">
-                                <label className="text-xs font-semibold text-orange-600 mb-2 flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-sm">storefront</span>
-                                    รับภาษี 1% จากใคร?
-                                </label>
-                                <input
-                                    type="text"
-                                    value={taxPayerName}
-                                    onChange={e => setTaxPayerName(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-xl border border-orange-200 bg-white text-base outline-none focus:border-orange-400 transition-colors mt-1"
-                                    placeholder="เช่น ร้านเกรซ, ร้านวินัย"
-                                />
-                                <div className="mt-3">
-                                    <label className="text-xs font-semibold text-orange-600 mb-1 block">จำนวนเงินภาษี</label>
-                                    <div className={`flex items-center rounded-xl px-4 py-3 border ${parseFloat(taxAmount) > 0 ? 'bg-green-50 border-green-300' : 'bg-white border-orange-200'}`}>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={taxAmount}
-                                            onChange={e => setTaxAmount(e.target.value)}
-                                            className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(taxAmount) > 0 ? 'text-green-700' : 'text-gray-400'}`}
-                                            placeholder="0.00"
-                                        />
-                                        <span className="text-sm text-gray-400 ml-2">บาท</span>
+                                                    </div>
+                                                    <div className="overflow-y-auto py-3 custom-scrollbar">
+                                                        {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => {
+                                                            const filteredOpts = FUND_TYPE_OPTIONS.filter(opt => opt.group === group && opt.label.toLowerCase().includes(addFundSearch.toLowerCase()));
+                                                            if (filteredOpts.length === 0) return null;
+                                                            return (
+                                                                <div key={group} className="mb-4 last:mb-0">
+                                                                    <div className="px-5 py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] bg-slate-50/50 dark:bg-white/5 border-y border-slate-100 dark:border-white/5">
+                                                                        {group}
+                                                                    </div>
+                                                                    {filteredOpts.map(opt => (
+                                                                        <button
+                                                                            key={opt.value}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setAddFundType(opt.value);
+                                                                                setIsFundDropdownOpen(false);
+                                                                                setIsEditingFund(false);
+                                                                                setAddFundSearch('');
+                                                                                const autoBank = schoolSettings.bankAccounts?.find(b => b.fundTypes.includes(opt.value));
+                                                                                if (autoBank) setAddBankId(autoBank.id);
+                                                                            }}
+                                                                            className={`w-full text-left px-6 py-3.5 text-sm font-bold transition-all duration-200 flex items-center justify-between ${addFundType === opt.value ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+                                                                        >
+                                                                            <span>{opt.label}</span>
+                                                                            {addFundType === opt.value && <span className="material-symbols-outlined text-xl">check_circle</span>}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
-                                {taxPayerName && parseFloat(taxAmount) > 0 && (
-                                    <div className="mt-3 bg-white rounded-lg border border-orange-100 px-3 py-2">
-                                        <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                        <p className="text-sm font-semibold text-gray-700">
-                                            <span className="material-symbols-outlined text-green-500 text-sm align-middle mr-1">check_circle</span>
-                                            รับเงินภาษี 1% จาก{taxPayerName} จำนวน {fmtMoney(parseFloat(taxAmount))} บาท
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
 
-                    {/* === โหมดภาษี 1% - จ่าย === */}
-                    {addFundType === 'fund-tax' && addTransactionType === 'expense' && (
-                        <div className="mt-2">
-                            {/* ปุ่มสลับโหมด */}
-                            <div className="flex gap-1.5 mb-3">
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsTaxManualMode(false); setTaxManualDesc(''); setTaxManualAmount(''); }}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all border ${!isTaxManualMode
-                                        ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
-                                        : 'bg-white border-gray-200 text-gray-500 hover:border-orange-300'
-                                        }`}
-                                >
-                                    <span className="material-symbols-outlined text-sm align-middle mr-0.5">list</span>
-                                    เลือกจากรายการรับ
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsTaxManualMode(true); setSelectedTaxIncomeId(null); }}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all border ${isTaxManualMode
-                                        ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
-                                        : 'bg-white border-gray-200 text-gray-500 hover:border-orange-300'
-                                        }`}
-                                >
-                                    <span className="material-symbols-outlined text-sm align-middle mr-0.5">edit_note</span>
-                                    กรอกเอง (ยอดยกมา)
-                                </button>
-                            </div>
-
-                            {!isTaxManualMode ? (
-                                /* โหมดเลือกจากรายการรับ */
-                                <>
-                                    <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-sm text-orange-500">receipt_long</span>
-                                        เลือกรายการรายรับภาษี 1% ที่ต้องการนำส่ง
-                                        {!selectedTaxIncomeId && (
-                                            <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
-                                        )}
+                                {/* 2. บัญชีธนาคาร */}
+                                <div className="space-y-3">
+                                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm text-emerald-500">account_balance</span>
+                                        2. บัญชีธนาคาร
                                     </label>
-                                    <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                                        {taxIncomeTransactions.length === 0 ? (
-                                            <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                                <span className="material-symbols-outlined text-2xl mb-1 opacity-50">inbox</span>
-                                                <p className="text-xs">ยังไม่มีรายการรายรับภาษี 1%</p>
-                                                <p className="text-[10px] mt-1">หากเป็นยอดยกมา กรุณาใช้โหมด "กรอกเอง" แทน</p>
-                                            </div>
-                                        ) : (
-                                            taxIncomeTransactions.map((tx: any) => {
-                                                const isSelected = selectedTaxIncomeId === tx.id;
-                                                return (
-                                                    <button
-                                                        key={tx.id}
-                                                        type="button"
-                                                        onClick={() => setSelectedTaxIncomeId(isSelected ? null : tx.id)}
-                                                        className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all border-2 flex justify-between items-center gap-2 ${isSelected
-                                                            ? 'bg-orange-50 border-orange-400 shadow-sm shadow-orange-100'
-                                                            : 'bg-white border-gray-200 hover:border-orange-300 hover:bg-orange-50/30'
-                                                            }`}
-                                                    >
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected
-                                                                ? 'border-orange-500 bg-orange-500'
-                                                                : 'border-gray-300'
-                                                                }`}>
-                                                                {isSelected && (
-                                                                    <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                                )}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="font-medium text-gray-800 truncate">{tx.description || tx.payer || 'ไม่ระบุรายการ'}</p>
-                                                                <p className="text-[11px] text-gray-400">
-                                                                    {fmtShort(tx.date)} • เอกสาร: {tx.docNo || '-'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <span className="text-sm font-bold text-green-600 whitespace-nowrap shrink-0">
-                                                            {fmtMoney(tx.income)} ฿
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                    {selectedTaxIncomeId && (() => {
-                                        const sel = taxIncomeTransactions.find((t: any) => t.id === selectedTaxIncomeId);
-                                        if (!sel) return null;
-                                        return (
-                                            <div className="mt-3 bg-red-50/50 rounded-xl border border-red-200 px-4 py-3">
-                                                <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                <p className="text-sm font-semibold text-gray-700">
-                                                    <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                    นำส่งภาษี 1% ({extractFundName(sel.description || sel.payer || 'ไม่ระบุ')}) จำนวน {fmtMoney(sel.income)} บาท
-                                                </p>
-                                            </div>
-                                        );
-                                    })()}
-                                </>
-                            ) : (
-                                /* โหมดกรอกเอง (ยอดยกมา) */
-                                <div className="bg-orange-50/50 rounded-xl border border-orange-200 p-4">
-                                    <p className="text-[11px] text-orange-600 mb-3 flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-sm">info</span>
-                                        สำหรับยอดยกมาที่ไม่มีรายการรับให้เลือก
-                                    </p>
-                                    <label className="text-xs font-semibold text-orange-700 mb-1 block">รายละเอียดการนำส่ง</label>
+                                    <select
+                                        value={addBankId}
+                                        onChange={e => setAddBankId(e.target.value)}
+                                        className="modern-input font-bold"
+                                    >
+                                        <option value="">-- คลิกเลือกบัญชี --</option>
+                                        {schoolSettings.bankAccounts?.map(acc => (
+                                            <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* 3. โครงการ / กิจกรรม */}
+                                <div className="space-y-3">
+                                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm text-blue-500">assignment</span>
+                                        3. โครงการ / กิจกรรม
+                                    </label>
                                     <input
                                         type="text"
-                                        value={taxManualDesc}
-                                        onChange={e => setTaxManualDesc(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border border-orange-200 bg-white text-base outline-none focus:border-orange-400 transition-colors"
-                                        placeholder="เช่น นำส่งภาษี 1% จากร้านค้า ABC"
+                                        value={addProject}
+                                        onChange={e => setAddProject(e.target.value)}
+                                        className="modern-input font-bold"
+                                        placeholder="เช่น กิจกรรมพัฒนาคุณภาพผู้เรียน..."
                                     />
-                                    <div className="mt-3">
-                                        <label className="text-xs font-semibold text-orange-700 mb-1 block">จำนวนเงิน</label>
-                                        <div className={`flex items-center rounded-xl px-4 py-3 border ${parseFloat(taxManualAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-orange-200'}`}>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                value={taxManualAmount}
-                                                onChange={e => setTaxManualAmount(e.target.value)}
-                                                className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(taxManualAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                placeholder="0.00"
-                                            />
-                                            <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                        </div>
-                                    </div>
-                                    {taxManualDesc && parseFloat(taxManualAmount) > 0 && (
-                                        <div className="mt-3 bg-white rounded-lg border border-orange-100 px-3 py-2">
-                                            <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                            <p className="text-sm font-semibold text-gray-700">
-                                                <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                นำส่งภาษี 1% ({taxManualDesc}) จำนวน {fmtMoney(parseFloat(taxManualAmount))} บาท
-                                            </p>
-                                        </div>
-                                    )}
                                 </div>
-                            )}
+
+                                {/* 4. วันที่ และ ที่เอกสาร */}
+                                <div className="grid grid-cols-2 gap-5">
+                                    <div className="space-y-3">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">4. วันที่</label>
+                                        <ThaiDatePicker value={addDate} onChange={(val: string) => setAddDate(val)} />
+                                    </div>
+                                    <div className="space-y-3">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">5. ที่เอกสาร</label>
+                                        <input
+                                            type="text" value={addDocNo}
+                                            onChange={e => setAddDocNo(e.target.value)}
+                                            className="modern-input font-black"
+                                            placeholder="เลขอ้างอิง..."
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
 
-                    {/* === โหมดเงินปัจจัยยากจน - จ่าย === */}
-                    {addFundType === 'fund-poor' && addTransactionType === 'expense' && (
-                        <div className="mt-2">
-                            <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                <span className="material-symbols-outlined text-sm text-purple-500">volunteer_activism</span>
-                                เลือกรายการรายรับปัจจัยยากจนที่ต้องการจ่าย
-                                {!selectedPoorIncomeId && (
-                                    <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
-                                )}
-                            </label>
-                            <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                                {poorIncomeTransactions.length === 0 ? (
-                                    <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                        <span className="material-symbols-outlined text-2xl mb-1 opacity-50">inbox</span>
-                                        <p className="text-xs">ยังไม่มีรายการรายรับปัจจัยยากจน</p>
-                                        <p className="text-[10px] mt-1">กรุณาเพิ่มรายการรับก่อน</p>
-                                    </div>
-                                ) : (
-                                    poorIncomeTransactions.map((tx: any) => {
-                                        const isSelected = selectedPoorIncomeId === tx.id;
-                                        return (
-                                            <button
-                                                key={tx.id}
-                                                type="button"
-                                                onClick={() => setSelectedPoorIncomeId(isSelected ? null : tx.id)}
-                                                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all border-2 flex justify-between items-center gap-2 ${isSelected
-                                                    ? 'bg-purple-50 border-purple-400 shadow-sm shadow-purple-100'
-                                                    : 'bg-white border-gray-200 hover:border-purple-300 hover:bg-purple-50/30'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected
-                                                        ? 'border-purple-500 bg-purple-500'
-                                                        : 'border-gray-300'
-                                                        }`}>
-                                                        {isSelected && (
-                                                            <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="font-medium text-gray-800 truncate">{tx.description || tx.payer || 'ไม่ระบุรายการ'}</p>
-                                                        <p className="text-[11px] text-gray-400">
-                                                            {fmtShort(tx.date)} • เอกสาร: {tx.docNo || '-'}
-                                                        </p>
-                                                    </div>
+                    {/* Section 2: Special Modes (Tax, Poor, EEF, State) */}
+                    <div className="mb-10">
+                        {showBorrowMode ? renderBorrowSection() : isGroupMode ? (
+                            <div className="space-y-6">
+                                <div className="flex flex-col items-center justify-center p-10 bg-blue-500/5 rounded-[32px] border-2 border-dashed border-blue-500/20">
+                                    <span className="material-symbols-outlined text-5xl text-blue-500/50 mb-4 animate-pulse">group_work</span>
+                                    <p className="text-slate-500 font-bold text-center">ขณะนี้กำลังอยู่ในโหมด "บันทึกเป็นกลุ่ม"<br /><span className="text-[11px] text-slate-400 font-medium">ทุกรายการจะแชร์ข้อมูลโครงการและวันที่ร่วมกัน</span></p>
+                                </div>
+                                {renderMainItemsSection()}
+                            </div>
+                        ) : (
+                            <>
+
+                                {/* === โหมดภาษี 1% - รับ === */}
+                                {addFundType === 'fund-tax' && addTransactionType === 'income' && (
+                                    <div className="space-y-4 mt-2 animate-scale-up">
+                                        <div className="bg-amber-500/10 dark:bg-amber-500/5 rounded-[28px] border-2 border-amber-500/20 p-8">
+                                            <label className="text-xs font-black text-amber-600 dark:text-amber-400 mb-4 flex items-center gap-2 uppercase tracking-widest">
+                                                <span className="material-symbols-outlined">storefront</span>
+                                                รับภาษี 1% จากใคร?
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={taxPayerName}
+                                                onChange={e => setTaxPayerName(e.target.value)}
+                                                className="w-full px-6 py-4 rounded-[18px] border-2 border-amber-500/10 dark:border-white/5 bg-white dark:bg-slate-800 text-lg font-bold outline-none focus:border-amber-500 transition-all shadow-inner placeholder:text-slate-300"
+                                                placeholder="เช่น ร้านเกรซ, ร้านวินัย..."
+                                            />
+                                            <div className="mt-8">
+                                                <label className="text-xs font-black text-amber-600 dark:text-amber-400 mb-2 block uppercase tracking-widest">จำนวนเงินภาษี</label>
+                                                <div className={`flex items-center rounded-[18px] px-6 py-4 border-2 transition-all duration-300 ${parseFloat(taxAmount) > 0 ? 'bg-emerald-500/5 border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-white dark:bg-slate-800 border-amber-500/10 dark:border-white/5'}`}>
+                                                    <input
+                                                        type="number" step="0.01"
+                                                        value={taxAmount}
+                                                        onChange={e => setTaxAmount(e.target.value)}
+                                                        className={`w-full text-2xl font-black text-right outline-none bg-transparent ${parseFloat(taxAmount) > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}
+                                                        placeholder="0.00"
+                                                    />
+                                                    <span className="text-lg font-black text-slate-400 ml-3">฿</span>
                                                 </div>
-                                                <span className="text-sm font-bold text-green-600 whitespace-nowrap shrink-0">
-                                                    {fmtMoney(tx.income)} ฿
-                                                </span>
-                                            </button>
-                                        );
-                                    })
-                                )}
-                            </div>
-                            {selectedPoorIncomeId && (() => {
-                                const sel = poorIncomeTransactions.find((t: any) => t.id === selectedPoorIncomeId);
-                                if (!sel) return null;
-                                return (
-                                    <div className="mt-3 space-y-2">
-                                        <div className="bg-purple-50/60 rounded-xl border border-purple-200 px-4 py-3">
-                                            <label className="text-xs font-semibold text-purple-700 block mb-1">จำนวนเงินที่จ่าย (บาท)</label>
-                                            <div className={`flex items-center rounded-lg px-3 py-2 border ${parseFloat(customExpenseAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-purple-200'}`}>
-                                                <input
-                                                    type="number" step="0.01"
-                                                    value={customExpenseAmount}
-                                                    onChange={e => setCustomExpenseAmount(e.target.value)}
-                                                    className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(customExpenseAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                    placeholder={`สูงสุด ${fmtMoney(sel.income)}`}
-                                                />
-                                                <span className="text-sm text-gray-400 ml-2">บาท</span>
                                             </div>
-                                            <p className="text-[10px] text-purple-500 mt-1">รายการ: {sel.description || 'เงินปัจจัยพื้นฐานนักเรียนยากจน'} (รับมา {fmtMoney(sel.income)} บาท)</p>
                                         </div>
-                                        {parseFloat(customExpenseAmount) > 0 && (
-                                            <div className="bg-white rounded-lg border border-purple-100 px-3 py-2">
-                                                <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                <p className="text-sm font-semibold text-gray-700">
-                                                    <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                    จ่าย{sel.description || 'เงินปัจจัยพื้นฐานนักเรียนยากจน'} จำนวน {fmtMoney(parseFloat(customExpenseAmount))} บาท
-                                                </p>
-                                            </div>
-                                        )}
                                     </div>
-                                );
-                            })()}
-                        </div>
-                    )}
-
-                    {/* === โหมดเงิน กสศ. - จ่าย === */}
-                    {addFundType === 'fund-eef' && addTransactionType === 'expense' && (
-                        <div className="mt-2">
-                            <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                <span className="material-symbols-outlined text-sm text-teal-500">volunteer_activism</span>
-                                เลือกรายการรายรับ กสศ. ที่ต้องการจ่าย
-                                {!selectedEefIncomeId && (
-                                    <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
                                 )}
-                            </label>
-                            <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                                {eefIncomeTransactions.length === 0 ? (
-                                    <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                        <span className="material-symbols-outlined text-2xl mb-1 opacity-50">inbox</span>
-                                        <p className="text-xs">ยังไม่มีรายการรายรับ กสศ.</p>
-                                        <p className="text-[10px] mt-1">กรุณาเพิ่มรายการรับก่อน</p>
-                                    </div>
-                                ) : (
-                                    eefIncomeTransactions.map((tx: any) => {
-                                        const isSelected = selectedEefIncomeId === tx.id;
-                                        return (
+
+                                {/* === โหมดภาษี 1% - จ่าย === */}
+                                {addFundType === 'fund-tax' && addTransactionType === 'expense' && (
+                                    <div className="mt-2 animate-scale-up">
+                                        <div className="flex gap-2 mb-6 bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-white/20">
                                             <button
-                                                key={tx.id}
                                                 type="button"
-                                                onClick={() => setSelectedEefIncomeId(isSelected ? null : tx.id)}
-                                                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all border-2 flex justify-between items-center gap-2 ${isSelected
-                                                    ? 'bg-teal-50 border-teal-400 shadow-sm shadow-teal-100'
-                                                    : 'bg-white border-gray-200 hover:border-teal-300 hover:bg-teal-50/30'
-                                                    }`}
+                                                onClick={() => { setIsTaxManualMode(false); setTaxManualDesc(''); setTaxManualAmount(''); }}
+                                                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all duration-300 flex items-center justify-center gap-2 ${!isTaxManualMode ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' : 'text-slate-500 hover:text-slate-700'}`}
                                             >
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected
-                                                        ? 'border-teal-500 bg-teal-500'
-                                                        : 'border-gray-300'
-                                                        }`}>
-                                                        {isSelected && (
-                                                            <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="font-medium text-gray-800 truncate">{tx.description || tx.payer || 'ไม่ระบุรายการ'}</p>
-                                                        <p className="text-[11px] text-gray-400">
-                                                            {fmtShort(tx.date)} • เอกสาร: {tx.docNo || '-'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <span className="text-sm font-bold text-green-600 whitespace-nowrap shrink-0">
-                                                    {fmtMoney(tx.income)} ฟ
-                                                </span>
+                                                <span className="material-symbols-outlined text-sm">receipt_long</span>
+                                                เลือกจากรายการรับ
                                             </button>
-                                        );
-                                    })
-                                )}
-                            </div>
-                            {selectedEefIncomeId && (() => {
-                                const sel = eefIncomeTransactions.find((t: any) => t.id === selectedEefIncomeId);
-                                if (!sel) return null;
-                                return (
-                                    <div className="mt-3 space-y-2">
-                                        <div className="bg-teal-50/60 rounded-xl border border-teal-200 px-4 py-3">
-                                            <label className="text-xs font-semibold text-teal-700 block mb-1">จำนวนเงินที่จ่าย (บาท)</label>
-                                            <div className={`flex items-center rounded-lg px-3 py-2 border ${parseFloat(customExpenseAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-teal-200'}`}>
-                                                <input
-                                                    type="number" step="0.01"
-                                                    value={customExpenseAmount}
-                                                    onChange={e => setCustomExpenseAmount(e.target.value)}
-                                                    className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(customExpenseAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                    placeholder={`สูงสุด ${fmtMoney(sel.income)}`}
-                                                />
-                                                <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                            </div>
-                                            <p className="text-[10px] text-teal-600 mt-1">รายการ: {sel.description || 'เงิน กสศ.'} (รับมา {fmtMoney(sel.income)} บาท)</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsTaxManualMode(true); setSelectedTaxIncomeId(null); }}
+                                                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all duration-300 flex items-center justify-center gap-2 ${isTaxManualMode ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' : 'text-slate-500 hover:text-slate-700'}`}
+                                            >
+                                                <span className="material-symbols-outlined text-sm">edit_note</span>
+                                                กรอกเอง (ยอดยกมา)
+                                            </button>
                                         </div>
-                                        {parseFloat(customExpenseAmount) > 0 && (
-                                            <div className="bg-white rounded-lg border border-teal-100 px-3 py-2">
-                                                <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                <p className="text-sm font-semibold text-gray-700">
-                                                    <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                    จ่าย{sel.description || 'เงิน กสศ.'} จำนวน {fmtMoney(parseFloat(customExpenseAmount))} บาท
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    )}
 
-                    {/* === โหมดเงินรายได้แผ่นดิน - จ่าย === */}
-                    {addFundType?.startsWith('fund-state') && addTransactionType === 'expense' && (
-                        <div className="mt-2">
-                            {/* ปุ่มสลับโหมด */}
-                            <div className="flex gap-1.5 mb-3">
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsStateManualMode(false); setStateManualDesc(''); setStateManualAmount(''); }}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all border ${!isStateManualMode
-                                        ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                                        : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
-                                        }`}
-                                >
-                                    <span className="material-symbols-outlined text-sm align-middle mr-0.5">list</span>
-                                    เลือกจากรายการรับ
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsStateManualMode(true); setSelectedStateIncomeId(null); }}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all border ${isStateManualMode
-                                        ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                                        : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
-                                        }`}
-                                >
-                                    <span className="material-symbols-outlined text-sm align-middle mr-0.5">edit_note</span>
-                                    กรอกเอง (ยอดยกมา)
-                                </button>
-                            </div>
-
-                            {!isStateManualMode ? (
-                                /* โหมดเลือกจากรายการรับ */
-                                <>
-                                    <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-sm text-blue-500">account_balance</span>
-                                        เลือกรายการรายรับเงินรายได้แผ่นดิน (ดอกเบี้ย) ที่ต้องการจ่าย
-                                        {!selectedStateIncomeId && (
-                                            <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
-                                        )}
-                                    </label>
-                                    <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                                        {stateIncomeTransactions.length === 0 ? (
-                                            <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                                <span className="material-symbols-outlined text-2xl mb-1 opacity-50">inbox</span>
-                                                <p className="text-xs">ยังไม่มีรายการรายรับเงินรายได้แผ่นดิน</p>
-                                                <p className="text-[10px] mt-1">หากเป็นยอดยกมา กรุณาใช้โหมด "กรอกเอง" แทน</p>
+                                        {!isTaxManualMode ? (
+                                            <div className="space-y-4">
+                                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-1 flex items-center justify-between">
+                                                    <span>เลือกรายการที่ต้องการนำส่ง</span>
+                                                    {!selectedTaxIncomeId && <span className="text-rose-500 animate-pulse low-power-pulse font-medium">--- กรุณาเลือก ---</span>}
+                                                </label>
+                                                <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                                    {taxIncomeTransactions.length === 0 ? (
+                                                        <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-[32px] border-2 border-dashed border-slate-200">
+                                                            <span className="material-symbols-outlined text-5xl text-slate-300 mb-2">inbox</span>
+                                                            <p className="text-slate-400 font-bold">ไม่พบรายการรายรับภาษี 1%</p>
+                                                        </div>
+                                                    ) : taxIncomeTransactions.map((tx: any) => {
+                                                        const isSelected = selectedTaxIncomeId === tx.id;
+                                                        return (
+                                                            <button key={tx.id} type="button" onClick={() => setSelectedTaxIncomeId(isSelected ? null : tx.id)}
+                                                                className={`text-left p-5 rounded-[24px] transition-all duration-300 border-2 group flex justify-between items-center ${isSelected ? 'bg-amber-500/10 border-amber-500 shadow-xl shadow-amber-500/10' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-white/5 hover:border-amber-200'}`}>
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors shadow-inner ${isSelected ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                                                                        <span className="material-symbols-outlined text-xl">{isSelected ? 'check' : 'receipt'}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className={`font-black tracking-tight ${isSelected ? 'text-amber-700 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>{tx.description || tx.payer || 'ไม่มีชื่อรายการ'}</p>
+                                                                        <p className="text-[11px] font-bold text-slate-400 mt-0.5">{fmtShort(tx.date)} • {tx.docNo || 'ไม่มีเลขที่'}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-xl font-black text-emerald-600">{fmtMoney(tx.income)} ฿</p>
+                                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Tax Amount</p>
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         ) : (
-                                            stateIncomeTransactions.map((tx: any) => {
-                                                const isSelected = selectedStateIncomeId === tx.id;
-                                                return (
-                                                    <button
-                                                        key={tx.id}
-                                                        type="button"
-                                                        onClick={() => setSelectedStateIncomeId(isSelected ? null : tx.id)}
-                                                        className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all border-2 flex justify-between items-center gap-2 ${isSelected
-                                                            ? 'bg-blue-50 border-blue-400 shadow-sm shadow-blue-100'
-                                                            : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'
-                                                            }`}
-                                                    >
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected
-                                                                ? 'border-blue-500 bg-blue-500'
-                                                                : 'border-gray-300'
-                                                                }`}>
-                                                                {isSelected && (
-                                                                    <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                                )}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="font-medium text-gray-800 truncate">{tx.description || tx.payer || 'ไม่ระบุรายการ'}</p>
-                                                                <p className="text-[11px] text-gray-400">
-                                                                    {fmtShort(tx.date)} • เอกสาร: {tx.docNo || '-'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <span className="text-sm font-bold text-green-600 whitespace-nowrap shrink-0">
-                                                            {fmtMoney(tx.income)} ฿
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })
+                                            <div className="bg-amber-500/10 dark:bg-amber-500/5 rounded-[28px] border-2 border-amber-500/20 p-8 space-y-6">
+                                                <div className="space-y-3">
+                                                    <label className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">รายละเอียดการนำส่ง</label>
+                                                    <input type="text" value={taxManualDesc} onChange={e => setTaxManualDesc(e.target.value)}
+                                                        className="w-full px-6 py-4 rounded-[18px] border-2 border-amber-500/10 dark:border-white/5 bg-white dark:bg-slate-800 text-lg font-bold outline-none focus:border-amber-500 transition-all"
+                                                        placeholder="เช่น นำส่งภาษี 1% จากร้านค้า..." />
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <label className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest text-right block">จำนวนเงิน</label>
+                                                    <div className={`flex items-center rounded-[18px] px-6 py-4 border-2 transition-all duration-300 ${parseFloat(taxManualAmount) > 0 ? 'bg-rose-500/5 border-rose-500/20 shadow-lg shadow-rose-500/5' : 'bg-white dark:bg-slate-800 border-amber-500/10 dark:border-white/5'}`}>
+                                                        <input type="number" step="0.01" value={taxManualAmount} onChange={e => setTaxManualAmount(e.target.value)}
+                                                            className={`w-full text-2xl font-black text-right outline-none bg-transparent ${parseFloat(taxManualAmount) > 0 ? 'text-rose-600' : 'text-slate-400'}`}
+                                                            placeholder="0.00" />
+                                                        <span className="text-lg font-black text-slate-400 ml-3">฿</span>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
-                                    {selectedStateIncomeId && (() => {
-                                        const sel = stateIncomeTransactions.find((t: any) => t.id === selectedStateIncomeId);
-                                        if (!sel) return null;
-                                        return (
-                                            <div className="mt-3 space-y-2">
-                                                <div className="bg-blue-50/60 rounded-xl border border-blue-200 px-4 py-3">
-                                                    <label className="text-xs font-semibold text-blue-700 block mb-1">จำนวนเงินที่จ่าย (บาท)</label>
-                                                    <div className={`flex items-center rounded-lg px-3 py-2 border ${parseFloat(customExpenseAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-blue-200'}`}>
-                                                        <input
-                                                            type="number" step="0.01"
-                                                            value={customExpenseAmount}
-                                                            onChange={e => setCustomExpenseAmount(e.target.value)}
-                                                            className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(customExpenseAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                            placeholder={`สูงสุด ${fmtMoney(sel.income)}`}
-                                                        />
-                                                        <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                                    </div>
-                                                    <p className="text-[10px] text-blue-500 mt-1">รายการ: {sel.description || 'เงินรายได้แผ่นดิน'} (รับมา {fmtMoney(sel.income)} บาท)</p>
+                                )}
+
+                                {/* === โหมดเงินปัจจัยยากจน - จ่าย === */}
+                                {addFundType === 'fund-poor' && addTransactionType === 'expense' && (
+                                    <div className="mt-2 animate-scale-up space-y-6">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-1 flex items-center justify-between">
+                                            <span className="flex items-center gap-2"><span className="material-symbols-outlined text-purple-500 text-sm">volunteer_activism</span>เลือกรายการรายรับปัจจัยยากจน</span>
+                                            {!selectedPoorIncomeId && <span className="text-rose-500 animate-pulse font-medium">--- กรุณาเลือก ---</span>}
+                                        </label>
+                                        <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                            {poorIncomeTransactions.length === 0 ? (
+                                                <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-[32px] border-2 border-dashed border-slate-200">
+                                                    <span className="material-symbols-outlined text-5xl text-slate-300 mb-2">inbox</span>
+                                                    <p className="text-slate-400 font-bold">ไม่พบรายการรายรับปัจจัยยากจน</p>
                                                 </div>
-                                                {parseFloat(customExpenseAmount) > 0 && (
-                                                    <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
-                                                        <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                                        <p className="text-sm font-semibold text-gray-700">
-                                                            <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                            ส่งดอกเบี้ย ({sel.description || 'เงินรายได้แผ่นดิน'}) จำนวน {fmtMoney(parseFloat(customExpenseAmount))} บาท
-                                                        </p>
+                                            ) : poorIncomeTransactions.map((tx: any) => {
+                                                const isSelected = selectedPoorIncomeId === tx.id;
+                                                return (
+                                                    <button key={tx.id} type="button" onClick={() => setSelectedPoorIncomeId(isSelected ? null : tx.id)}
+                                                        className={`text-left p-5 rounded-[24px] transition-all duration-300 border-2 flex justify-between items-center ${isSelected ? 'bg-purple-500/10 border-purple-500 shadow-xl shadow-purple-500/10' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-white/5 hover:border-purple-200'}`}>
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${isSelected ? 'bg-purple-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                                                                <span className="material-symbols-outlined text-xl">{isSelected ? 'check' : 'person'}</span>
+                                                            </div>
+                                                            <div>
+                                                                <p className={`font-black tracking-tight ${isSelected ? 'text-purple-700 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>{tx.description || tx.payer || 'ไม่มีชื่อรายการ'}</p>
+                                                                <p className="text-[11px] font-bold text-slate-400 mt-0.5">{fmtShort(tx.date)} • {tx.docNo || 'ไม่มีเลขที่'}</p>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-xl font-black text-emerald-600">{fmtMoney(tx.income)} ฿</p>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        {selectedPoorIncomeId && (
+                                            <div className="bg-purple-500/10 dark:bg-purple-500/5 rounded-[28px] border-2 border-purple-200 p-8 animate-slide-up">
+                                                <label className="text-xs font-black text-purple-700 dark:text-purple-400 mb-2 block uppercase tracking-widest">จำนวนเงินที่จ่าย (บาท)</label>
+                                                <div className="flex items-center rounded-[18px] px-6 py-4 bg-white dark:bg-slate-800 border-2 border-purple-500/10 shadow-inner">
+                                                    <input type="number" step="0.01" value={customExpenseAmount} onChange={e => setCustomExpenseAmount(e.target.value)}
+                                                        className="w-full text-2xl font-black text-right outline-none bg-transparent text-rose-600"
+                                                        placeholder="0.00" />
+                                                    <span className="text-lg font-black text-slate-400 ml-3">฿</span>
+                                                </div>
+                                                <p className="text-[11px] font-bold text-slate-400 mt-3 text-center">ยอดรับมา: {fmtMoney(poorIncomeTransactions.find((t: any) => t.id === selectedPoorIncomeId)?.income || 0)} บาท</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* === โหมดเงิน กสศ. - จ่าย === */}
+                                {addFundType === 'fund-eef' && addTransactionType === 'expense' && (
+                                    <div className="mt-2 animate-scale-up space-y-6">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-1 flex items-center justify-between">
+                                            <span className="flex items-center gap-2"><span className="material-symbols-outlined text-teal-500 text-sm">volunteer_activism</span>เลือกรายการรายรับ กสศ.</span>
+                                            {!selectedEefIncomeId && <span className="text-rose-500 animate-pulse font-medium">--- กรุณาเลือก ---</span>}
+                                        </label>
+                                        <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                            {eefIncomeTransactions.length === 0 ? (
+                                                <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-[32px] border-2 border-dashed border-slate-200">
+                                                    <span className="material-symbols-outlined text-5xl text-slate-300 mb-2">inbox</span>
+                                                    <p className="text-slate-400 font-bold">ไม่พบรายการรายรับ กสศ.</p>
+                                                </div>
+                                            ) : eefIncomeTransactions.map((tx: any) => {
+                                                const isSelected = selectedEefIncomeId === tx.id;
+                                                return (
+                                                    <button key={tx.id} type="button" onClick={() => setSelectedEefIncomeId(isSelected ? null : tx.id)}
+                                                        className={`text-left p-5 rounded-[24px] transition-all duration-300 border-2 flex justify-between items-center ${isSelected ? 'bg-teal-500/10 border-teal-500 shadow-xl shadow-teal-500/10' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-white/5 hover:border-teal-200'}`}>
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${isSelected ? 'bg-teal-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                                                                <span className="material-symbols-outlined text-xl">{isSelected ? 'check' : 'group_add'}</span>
+                                                            </div>
+                                                            <div>
+                                                                <p className={`font-black tracking-tight ${isSelected ? 'text-teal-700 dark:text-teal-400' : 'text-slate-700 dark:text-slate-200'}`}>{tx.description || tx.payer || 'ไม่มีชื่อรายการ'}</p>
+                                                                <p className="text-[11px] font-bold text-slate-400 mt-0.5">{fmtShort(tx.date)} • {tx.docNo || 'ไม่มีเลขที่'}</p>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-xl font-black text-emerald-600">{fmtMoney(tx.income)} ฿</p>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        {selectedEefIncomeId && (
+                                            <div className="bg-teal-500/10 dark:bg-teal-500/5 rounded-[28px] border-2 border-teal-200 p-8 animate-slide-up">
+                                                <label className="text-xs font-black text-teal-700 dark:text-teal-400 mb-2 block uppercase tracking-widest">จำนวนเงินที่จ่าย (บาท)</label>
+                                                <div className="flex items-center rounded-[18px] px-6 py-4 bg-white dark:bg-slate-800 border-2 border-teal-500/10 shadow-inner">
+                                                    <input type="number" step="0.01" value={customExpenseAmount} onChange={e => setCustomExpenseAmount(e.target.value)}
+                                                        className="w-full text-2xl font-black text-right outline-none bg-transparent text-rose-600"
+                                                        placeholder="0.00" />
+                                                    <span className="text-lg font-black text-slate-400 ml-3">฿</span>
+                                                </div>
+                                                <p className="text-[11px] font-bold text-slate-400 mt-3 text-center">ยอดรับมา: {fmtMoney(eefIncomeTransactions.find((t: any) => t.id === selectedEefIncomeId)?.income || 0)} บาท</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* === โหมดเงินรายได้แผ่นดิน - จ่าย === */}
+                                {addFundType?.startsWith('fund-state') && addTransactionType === 'expense' && (
+                                    <div className="mt-2 animate-scale-up">
+                                        <div className="flex gap-2 mb-6 bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-white/20">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsStateManualMode(false); setStateManualDesc(''); setStateManualAmount(''); }}
+                                                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all duration-300 flex items-center justify-center gap-2 ${!isStateManualMode ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-slate-500 hover:text-slate-700'}`}
+                                            >
+                                                <span className="material-symbols-outlined text-sm">account_balance_wallet</span>
+                                                เลือกจากรายการรับ
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsStateManualMode(true); setSelectedStateIncomeId(null); }}
+                                                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all duration-300 flex items-center justify-center gap-2 ${isStateManualMode ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-slate-500 hover:text-slate-700'}`}
+                                            >
+                                                <span className="material-symbols-outlined text-sm">edit_note</span>
+                                                กรอกเอง (ยอดยกมา)
+                                            </button>
+                                        </div>
+
+                                        {!isStateManualMode ? (
+                                            <div className="space-y-4">
+                                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-1 flex items-center justify-between">
+                                                    <span>เลือกดอกเบี้ยที่ต้องการนำส่งแผ่นดิน</span>
+                                                    {!selectedStateIncomeId && <span className="text-rose-500 animate-pulse font-medium">--- กรุณาเลือก ---</span>}
+                                                </label>
+                                                <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                                    {stateIncomeTransactions.length === 0 ? (
+                                                        <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-[32px] border-2 border-dashed border-slate-200">
+                                                            <span className="material-symbols-outlined text-5xl text-slate-300 mb-2">inbox</span>
+                                                            <p className="text-slate-400 font-bold">ไม่พบรายการรายรับเงินรายได้แผ่นดิน</p>
+                                                        </div>
+                                                    ) : stateIncomeTransactions.map((tx: any) => {
+                                                        const isSelected = selectedStateIncomeId === tx.id;
+                                                        return (
+                                                            <button key={tx.id} type="button" onClick={() => setSelectedStateIncomeId(isSelected ? null : tx.id)}
+                                                                className={`text-left p-5 rounded-[24px] transition-all duration-300 border-2 flex justify-between items-center ${isSelected ? 'bg-primary/10 border-primary shadow-xl shadow-primary/10' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-white/5 hover:border-primary/20'}`}>
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${isSelected ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                                                                        <span className="material-symbols-outlined text-xl">{isSelected ? 'check' : 'savings'}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className={`font-black tracking-tight ${isSelected ? 'text-primary' : 'text-slate-700 dark:text-slate-200'}`}>{tx.description || tx.payer || 'ไม่มีชื่อรายการ'}</p>
+                                                                        <p className="text-[11px] font-bold text-slate-400 mt-0.5">{fmtShort(tx.date)} • {tx.docNo || 'ไม่มีเลขที่'}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <p className="text-xl font-black text-emerald-600">{fmtMoney(tx.income)} ฿</p>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-primary/10 dark:bg-primary/5 rounded-[28px] border-2 border-primary/20 p-8 space-y-6">
+                                                <div className="space-y-3">
+                                                    <label className="text-xs font-black text-primary uppercase tracking-widest">รายละเอียดการนำส่ง</label>
+                                                    <input type="text" value={stateManualDesc} onChange={e => setStateManualDesc(e.target.value)}
+                                                        className="w-full px-6 py-4 rounded-[18px] border-2 border-primary/10 dark:border-white/5 bg-white dark:bg-slate-800 text-lg font-bold outline-none focus:border-primary transition-all shadow-inner"
+                                                        placeholder="เช่น ส่งดอกเบี้ยเงินฝากธนาคาร..." />
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <label className="text-xs font-black text-primary uppercase tracking-widest text-right block">จำนวนเงิน</label>
+                                                    <div className="flex items-center rounded-[18px] px-6 py-4 bg-white dark:bg-slate-800 border-2 border-primary/10 shadow-inner group-focus-within:border-primary transition-all">
+                                                        <input type="number" step="0.01" value={stateManualAmount} onChange={e => setStateManualAmount(e.target.value)}
+                                                            className="w-full text-2xl font-black text-right outline-none bg-transparent text-rose-600"
+                                                            placeholder="0.00" />
+                                                        <span className="text-lg font-black text-slate-400 ml-3">฿</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Sub-items Section */}
+                                <div className="flex items-center justify-between py-6 border-t-2 border-slate-100/50 mt-8 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 shadow-inner">
+                                            <span className="material-symbols-outlined text-xl">list_alt</span>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">TRANSACTION ITEMS</p>
+                                            <p className="text-[11px] font-bold text-slate-300">{subItems.length} รายการที่บันทึก</p>
+                                        </div>
+                                    </div>
+                                    <button type="button" onClick={addSubItem}
+                                        className="flex items-center gap-2 px-5 py-2.5 rounded-[18px] bg-primary text-white text-xs font-black hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95 group">
+                                        <span className="material-symbols-outlined text-lg group-hover:rotate-90 transition-transform">add_circle</span>
+                                        เพิ่มรายการย่อย
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4 pb-8">
+                                    {subItems.map((s, idx) => {
+                                        const hasAmount = s.amount && parseFloat(s.amount) > 0;
+                                        const isHeader = !isGroupMode && !hasAmount && s.description;
+                                        return (
+                                            <div key={s.id} className={`group rounded-[28px] transition-all duration-300 border-2 ${isHeader
+                                                ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-white/10 shadow-sm'
+                                                : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-white/5 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5'
+                                                }`}>
+                                                <div className="flex items-center gap-4 px-6 py-5">
+                                                    {subItems.length > 1 ? (
+                                                        <button type="button" onClick={() => removeSubItem(s.id)}
+                                                            className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0 hover:bg-rose-500 hover:text-white transition-all scale-95 opacity-0 group-hover:opacity-100 border border-rose-100 dark:border-rose-500/20">
+                                                            <span className="material-symbols-outlined text-lg">delete</span>
+                                                        </button>
+                                                    ) : (
+                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner ${addTransactionType === 'income' ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-500'}`}>
+                                                            <span className="material-symbols-outlined text-lg font-black">{addTransactionType === 'income' ? 'add' : 'remove'}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <input type="text" value={s.description}
+                                                            onChange={e => updateSub(s.id, 'description', e.target.value)}
+                                                            className={`w-full py-1 text-xl outline-none placeholder:text-slate-300 bg-transparent transition-all border-b-2 border-transparent focus:border-primary/20 ${isHeader ? 'font-black text-slate-800 dark:text-slate-100' : 'font-bold text-slate-700 dark:text-slate-200'}`}
+                                                            placeholder={isGroupMode ? `ชื่อรายการ...` : (!s.amount ? 'หัวข้อหรือรายการ...' : `ชื่อรายการ...`)} />
+                                                    </div>
+                                                    <div className={`flex items-center rounded-2xl px-5 py-3 border-2 transition-all shadow-inner ${hasAmount
+                                                        ? addTransactionType === 'income' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/5 border-rose-500/20'
+                                                        : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-white/5'
+                                                        }`}>
+                                                        <input type="number" step="0.01" value={s.amount}
+                                                            onChange={e => updateSub(s.id, 'amount', e.target.value)}
+                                                            className={`w-32 text-2xl font-black text-right outline-none bg-transparent ${hasAmount
+                                                                ? addTransactionType === 'income' ? 'text-emerald-600' : 'text-rose-600'
+                                                                : 'text-slate-400'
+                                                                }`}
+                                                            placeholder="0.00" />
+                                                        <span className="ml-2 text-sm font-black text-slate-300">฿</span>
+                                                    </div>
+                                                </div>
+                                                {isGroupMode && (
+                                                    <div className="px-8 pb-6 pt-0 grid grid-cols-2 gap-4 animate-slide-up">
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">ประเภทเงิน</label>
+                                                            <select
+                                                                value={s.fundType || 'fund-subsidy'}
+                                                                onChange={e => updateSub(s.id, 'fundType', e.target.value)}
+                                                                className="w-full px-5 py-3 rounded-xl border-2 border-slate-100 dark:border-white/5 text-[13px] font-black outline-none focus:border-primary/30 bg-slate-50/50 dark:bg-slate-800 transition-all text-slate-600 dark:text-slate-300"
+                                                            >
+                                                                {FUND_TYPE_OPTIONS.map(opt => (
+                                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">บัญชีธนาคาร</label>
+                                                            <select
+                                                                value={s.bankId || ''}
+                                                                onChange={e => updateSub(s.id, 'bankId', e.target.value)}
+                                                                className="w-full px-5 py-3 rounded-xl border-2 border-slate-100 dark:border-white/5 text-[13px] font-black outline-none focus:border-primary/30 bg-slate-50/50 dark:bg-slate-800 transition-all text-slate-600 dark:text-slate-300"
+                                                            >
+                                                                <option value="">-- ไม่ระบุ (เงินสด) --</option>
+                                                                {schoolSettings.bankAccounts?.sort((a, b) => a.id === 'ba-other' ? 1 : b.id === 'ba-other' ? -1 : 0).map(acc => (
+                                                                    <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
                                         );
-                                    })()}
-                                </>
-                            ) : (
-                                /* โหมดกรอกเอง (ยอดยกมา) */
-                                <div className="bg-blue-50/50 rounded-xl border border-blue-200 p-4">
-                                    <p className="text-[11px] text-blue-600 mb-3 flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-sm">info</span>
-                                        สำหรับยอดยกมาที่ไม่มีรายการรับให้เลือก
-                                    </p>
-                                    <label className="text-xs font-semibold text-blue-700 mb-1 block">รายละเอียดการจ่าย</label>
-                                    <input
-                                        type="text"
-                                        value={stateManualDesc}
-                                        onChange={e => setStateManualDesc(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border border-blue-200 bg-white text-base outline-none focus:border-blue-400 transition-colors"
-                                        placeholder="เช่น ส่งดอกเบี้ยอาหารกลางวันเป็นเงินรายได้แผ่นดิน"
-                                    />
-                                    <div className="mt-3">
-                                        <label className="text-xs font-semibold text-blue-700 mb-1 block">จำนวนเงิน</label>
-                                        <div className={`flex items-center rounded-xl px-4 py-3 border ${parseFloat(stateManualAmount) > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-blue-200'}`}>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                value={stateManualAmount}
-                                                onChange={e => setStateManualAmount(e.target.value)}
-                                                className={`w-full text-base font-bold text-right outline-none bg-transparent ${parseFloat(stateManualAmount) > 0 ? 'text-red-700' : 'text-gray-400'}`}
-                                                placeholder="0.00"
-                                            />
-                                            <span className="text-sm text-gray-400 ml-2">บาท</span>
-                                        </div>
-                                    </div>
-                                    {stateManualDesc && parseFloat(stateManualAmount) > 0 && (
-                                        <div className="mt-3 bg-white rounded-lg border border-blue-100 px-3 py-2">
-                                            <p className="text-[11px] text-gray-400">จะบันทึกเป็น:</p>
-                                            <p className="text-sm font-semibold text-gray-700">
-                                                <span className="material-symbols-outlined text-red-500 text-sm align-middle mr-1">payments</span>
-                                                ส่งดอกเบี้ย ({stateManualDesc}) จำนวน {fmtMoney(parseFloat(stateManualAmount))} บาท
-                                            </p>
-                                        </div>
-                                    )}
+                                    })}
                                 </div>
-                            )}
-                        </div>
-                    )}
 
-                    {/* Sub-items Section */}
-                    <div className="flex items-center justify-between py-2 border-t border-slate-100 mt-2">
-                        <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-blue-500 text-sm">list_alt</span>
-                            <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                                {subItems.length} รายการ
-                            </span>
-                        </div>
-                        <button type="button" onClick={addSubItem}
-                            className="flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-500 text-white text-sm font-black hover:bg-blue-600 transition-all shadow-md shadow-blue-100">
-                            <span className="material-symbols-outlined text-lg">add_circle</span>
-                            เพิ่มรายการ
-                        </button>
-                    </div>
-
-                    <div className="space-y-2 pb-4">
-                        {subItems.map((s, idx) => {
-                            const hasAmount = s.amount && parseFloat(s.amount) > 0;
-                            const isHeader = !isGroupMode && !hasAmount && s.description;
-                            return (
-                                <div key={s.id} className={`group rounded-xl border transition-all duration-200 ${isHeader
-                                    ? 'bg-slate-100 border-slate-200 shadow-sm'
-                                    : 'bg-white border-slate-100 hover:border-blue-100 hover:shadow-sm'
-                                    }`}>
-                                    <div className="flex items-center gap-3 px-3 py-2">
-                                        {subItems.length > 1 ? (
-                                            <button type="button" onClick={() => removeSubItem(s.id)}
-                                                className="w-7 h-7 rounded-lg bg-red-50 text-red-400 flex items-center justify-center shrink-0 hover:bg-red-500 hover:text-white transition-all scale-90 opacity-0 group-hover:opacity-100 border border-red-100">
-                                                <span className="material-symbols-outlined text-sm">delete</span>
+                                {/* Payee Type Section */}
+                                {addTransactionType === 'expense' && !isGroupMode && (
+                                    <div className="mt-12 mb-8 pt-10 border-t-2 border-slate-100/50">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] block mb-6 text-center">
+                                            ประเภทผู้รับเงิน (Payee Type)
+                                            {!addPayeeType && (
+                                                <span className="text-rose-500 ml-3 animate-pulse font-bold underline decoration-wavy transition-all">กรุณาเลือก</span>
+                                            )}
+                                        </label>
+                                        <div className="flex gap-4 max-w-[420px] mx-auto bg-slate-100 dark:bg-slate-800 p-2 rounded-[24px] border border-slate-200 dark:border-white/5 shadow-inner">
+                                            <button
+                                                type="button"
+                                                onClick={() => setAddPayeeType('legal')}
+                                                className={`flex-1 py-4 rounded-[18px] text-lg font-black transition-all duration-300 flex items-center justify-center gap-3 ${addPayeeType === 'legal' ? 'bg-white dark:bg-slate-700 text-primary shadow-xl shadow-primary/10 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+                                            >
+                                                <span className="material-symbols-outlined">corporate_fare</span>
+                                                นิติบุคคล
                                             </button>
-                                        ) : (
-                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${addTransactionType === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
-                                                <span className="material-symbols-outlined text-sm font-black">check_circle</span>
-                                            </div>
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                            <input type="text" value={s.description}
-                                                onChange={e => updateSub(s.id, 'description', e.target.value)}
-                                                className={`w-full py-1 text-xl outline-none placeholder:text-slate-300 bg-transparent ${isHeader ? 'font-black text-slate-800' : 'font-bold text-slate-700'}`}
-                                                placeholder={isGroupMode ? `รายการ...` : (!s.amount ? 'เช่น บันทึกการรับเงิน...' : `รายการ...`)} />
-                                        </div>
-                                        <div className={`flex items-center rounded-lg px-2 py-1 border transition-all ${hasAmount
-                                            ? addTransactionType === 'income' ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'
-                                            : 'bg-slate-50 border-slate-50'
-                                            }`}>
-                                            <input type="number" step="0.01" value={s.amount}
-                                                onChange={e => updateSub(s.id, 'amount', e.target.value)}
-                                                className={`w-24 py-0.5 text-xl font-black text-right outline-none bg-transparent ${hasAmount
-                                                    ? addTransactionType === 'income' ? 'text-emerald-700' : 'text-rose-700'
-                                                    : 'text-slate-400'
-                                                    }`}
-                                                placeholder="0.00" />
+                                            <button
+                                                type="button"
+                                                onClick={() => setAddPayeeType('person')}
+                                                className={`flex-1 py-4 rounded-[18px] text-lg font-black transition-all duration-300 flex items-center justify-center gap-3 ${addPayeeType === 'person' ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-xl shadow-emerald-500/10 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+                                            >
+                                                <span className="material-symbols-outlined">person</span>
+                                                บุคคลธรรมดา
+                                            </button>
                                         </div>
                                     </div>
-                                    {isGroupMode && (
-                                        <div className="px-4 pb-3 pt-0 grid grid-cols-2 gap-3">
-                                            <select
-                                                value={s.fundType || 'fund-subsidy'}
-                                                onChange={e => updateSub(s.id, 'fundType', e.target.value)}
-                                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-50 text-[11px] font-bold outline-none focus:border-blue-200 bg-slate-50/50 transition-all text-slate-600"
-                                            >
-                                                {FUND_TYPE_OPTIONS.map(opt => (
-                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                ))}
-                                            </select>
-                                            <select
-                                                value={s.bankId || ''}
-                                                onChange={e => updateSub(s.id, 'bankId', e.target.value)}
-                                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-50 text-[11px] font-bold outline-none focus:border-blue-200 bg-slate-50/50 transition-all text-slate-600"
-                                            >
-                                                <option value="">-- บัญชีธนาคาร --</option>
-                                                {schoolSettings.bankAccounts?.sort((a, b) => a.id === 'ba-other' ? 1 : b.id === 'ba-other' ? -1 : 0).map(acc => (
-                                                    <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {/* Payee Type Section */}
-                    {addTransactionType === 'expense' && !isGroupMode && (
-                        <div className="mt-8 mb-6 pt-6 border-t-2 border-slate-50">
-                            <label className="text-sm font-black text-slate-400 uppercase tracking-[0.2em] block mb-5 text-center">
-                                ประเภทผู้รับเงิน
-                                {!addPayeeType && (
-                                    <span className="text-rose-500 ml-2 animate-pulse font-medium">--- กรุณาเลือก ---</span>
                                 )}
-                            </label>
-                            <div className="flex gap-2 max-w-[360px] mx-auto bg-slate-100 p-1 rounded-2xl border border-slate-200">
-                                <button
-                                    type="button"
-                                    onClick={() => setAddPayeeType('legal')}
-                                    className={`flex-1 py-3 rounded-xl text-lg font-black transition-all flex items-center justify-center gap-2 ${addPayeeType === 'legal' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                >
-                                    นิติบุคคล
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setAddPayeeType('person')}
-                                    className={`flex-1 py-3 rounded-xl text-lg font-black transition-all flex items-center justify-center gap-2 ${addPayeeType === 'person' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                >
-                                    บุคคลธรรมดา
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {/* Footer Section (Sticky) */}
-                <div className="p-6 border-t border-slate-100 shrink-0 bg-white shadow-[0_-8px_30px_rgb(0,0,0,0.04)] flex justify-between items-center">
-                    <div className="text-left">
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-0.5">TOTAL AMOUNT</p>
-                        <div className="flex items-baseline gap-1">
-                            <span className={`text-4xl font-black tracking-tighter ${addTransactionType === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                <div className="p-8 border-t border-slate-100 dark:border-white/5 shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[0_-12px_40px_rgba(0,0,0,0.06)] flex justify-between items-center z-10">
+                    <div className="text-left animate-slide-up">
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-1">ยอดรวมสุทธิ (TOTAL NET AMOUNT)</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className={`text-5xl font-black tracking-tighter transition-all duration-500 ${addTransactionType === 'income' ? 'text-emerald-600 drop-shadow-sm' : 'text-rose-600 drop-shadow-sm'}`}>
                                 {addTransactionType === 'income' ? '+' : '-'} {fmtMoney(subTotal || parseFloat(taxAmount) || parseFloat(taxManualAmount) || parseFloat(customExpenseAmount) || parseFloat(stateManualAmount) || 0)}
                             </span>
-                            <span className="text-xs font-bold text-slate-400">บาท</span>
+                            <span className="text-lg font-black text-slate-400">บาท</span>
                         </div>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-4">
                         <button type="button" onClick={onClose}
-                            className="px-6 py-3 rounded-xl bg-white border border-slate-200 text-slate-500 font-black text-[11px] hover:bg-slate-50 transition-all active:scale-95 uppercase tracking-wider">
+                            className="px-8 py-4 rounded-[22px] bg-slate-100 dark:bg-slate-800 text-slate-500 font-black text-xs hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95 uppercase tracking-widest border border-slate-200 dark:border-white/10">
                             ยกเลิก
                         </button>
                         <button type="submit"
-                            className={`px-8 py-3 rounded-xl font-black text-white text-sm shadow-lg transition-all active:scale-95 group flex items-center gap-2 uppercase tracking-wider ${addTransactionType === 'income' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-50' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-50'}`}>
-                            <span className="material-symbols-outlined text-lg font-black">save</span>
-                            {showBorrowMode ? 'สร้างสัญญายืม' : 'บันทึกรายการ'}
+                            className={`px-10 py-4 rounded-[22px] font-black text-white text-sm shadow-2xl transition-all active:scale-95 group flex items-center gap-3 uppercase tracking-[0.1em] ${addTransactionType === 'income' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/20' : 'bg-rose-600 hover:bg-rose-500 shadow-rose-500/20'}`}>
+                            <span className="material-symbols-outlined text-xl group-hover:scale-125 transition-transform duration-300">save</span>
+                            {showBorrowMode ? 'สร้างสัญญายืมเงิน' : 'บันทึกรายการลงสมุด'}
                         </button>
                     </div>
                 </div>

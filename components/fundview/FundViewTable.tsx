@@ -20,20 +20,20 @@ const FundViewTable: React.FC<FundViewTableProps> = ({ pageId, pageTransactions,
     }
 
     return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800 text-text-muted font-semibold text-xs border-b border-gray-200 dark:border-gray-700">
+        <div className="overflow-x-auto nav-scroll">
+            <table className="modern-table">
+                <thead>
                     <tr>
-                        <th className="px-6 py-3 whitespace-nowrap min-w-[110px]">ว/ด/ป</th>
-                        <th className="px-6 py-3 whitespace-nowrap">ที่เอกสาร</th>
-                        <th className="px-6 py-3 w-full">รายการ</th>
-                        <th className="px-6 py-3 whitespace-nowrap">รับจาก/จ่ายให้</th>
-                        <th className="px-6 py-3 text-right whitespace-nowrap">รายรับ</th>
-                        <th className="px-6 py-3 text-right whitespace-nowrap">รายจ่าย</th>
-                        <th className="px-6 py-3 text-right whitespace-nowrap">คงเหลือ</th>
+                        <th className="w-[120px]">ว/ด/ป</th>
+                        <th className="w-[150px]">ที่เอกสาร</th>
+                        <th className="w-full min-w-[300px]">รายการ</th>
+                        <th className="min-w-[150px]">รับจาก/จ่ายให้</th>
+                        <th className="text-right w-[120px]">รายรับ</th>
+                        <th className="text-right w-[120px]">รายจ่าย</th>
+                        <th className="text-right w-[140px]">คงเหลือ</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                <tbody>
                     {pageTransactions.map((tx) => {
                         const relevantTxs = transactions.filter(t =>
                             t.fundType === pageId &&
@@ -42,22 +42,34 @@ const FundViewTable: React.FC<FundViewTableProps> = ({ pageId, pageTransactions,
                         );
                         const currentBalance = relevantTxs.reduce((acc, t) => acc + (t.income || 0) - (t.expense || 0), 0);
                         return (
-                            <tr key={tx.id} onClick={() => onRowClick(tx)}
-                                className="hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer transition-colors">
-                                <td className="px-6 py-4 whitespace-nowrap">{formatThaiDateShort(tx.date)}</td>
-                                <td className="px-6 py-4 font-mono text-xs">{tx.docNo}</td>
-                                <td className="px-6 py-4">{tx.description}</td>
-                                <td className="px-6 py-4 text-xs text-text-muted truncate max-w-[150px]">
-                                    {tx.income > 0 ? (tx.payer || '-') : (tx.payee || '-')}
+                            <tr key={tx.id} onClick={() => onRowClick(tx)} className="group">
+                                <td className="font-bold text-slate-500 whitespace-nowrap">
+                                    <div className="flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-xs text-primary/40">calendar_today</span>
+                                        {formatThaiDateShort(tx.date)}
+                                    </div>
                                 </td>
-                                <td className="px-6 py-4 text-right font-medium text-green-600">
+                                <td className="font-black text-[11px] tracking-wider text-slate-400">
+                                    <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700">
+                                        {tx.docNo || 'N/A'}
+                                    </span>
+                                </td>
+                                <td className="font-bold text-slate-700 dark:text-slate-200">
+                                    {tx.description}
+                                </td>
+                                <td className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">
+                                    <div className="line-clamp-1">
+                                        {tx.income > 0 ? (tx.payer || '-') : (tx.payee || '-')}
+                                    </div>
+                                </td>
+                                <td className="text-right font-black text-green-600">
                                     {tx.income > 0 ? tx.income.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
                                 </td>
-                                <td className="px-6 py-4 text-right font-medium text-red-600">
+                                <td className="text-right font-black text-red-500">
                                     {tx.expense > 0 ? tx.expense.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
                                 </td>
-                                <td className="px-6 py-4 text-right font-bold text-text dark:text-text-dark">
-                                    {currentBalance === 0 ? '-' : currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                <td className="text-right font-black text-slate-900 dark:text-white bg-slate-50/50 dark:bg-white/5">
+                                    {currentBalance === 0 ? '0.00' : currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </td>
                             </tr>
                         );

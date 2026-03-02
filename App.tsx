@@ -111,7 +111,11 @@ const App: React.FC = () => {
 
   return (
     <SchoolProvider>
-      <div className="flex h-screen w-full overflow-hidden bg-background-light dark:bg-background-dark relative">
+      <div className="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 relative">
+        {/* Background Decorative Blobs */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none"></div>
+
         <Sidebar
           activePage={activePage}
           onNavigate={handleNavigate}
@@ -121,12 +125,14 @@ const App: React.FC = () => {
           selectedFiscalYear={selectedFiscalYear}
           onFiscalYearChange={setSelectedFiscalYear}
         />
-        <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+        <main className="flex-1 flex flex-col h-screen overflow-hidden relative z-10">
           <Header
             onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)}
             onSearchItemClick={(id) => setViewedTxId(id)}
           />
-          {renderMainContent()}
+          <div className="flex-1 overflow-hidden flex flex-col relative">
+            {renderMainContent()}
+          </div>
           {viewedTxId !== null && (
             <CashBookDetailModal
               isOpen={viewedTxId !== null}

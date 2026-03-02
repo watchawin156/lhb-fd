@@ -74,7 +74,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, onSearchItemClick }) => {
   }, [searchTerm, transactions]);
 
   return (
-    <header className="h-16 bg-surface dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-6 sticky top-0 z-[60] shrink-0 shadow-sm/50 transition-colors">
+    <header className="h-20 glass border-b border-white/10 flex items-center justify-between px-8 sticky top-0 z-[60] shrink-0 transition-all duration-300">
       <div className="flex items-center gap-4 md:hidden">
         <button onClick={onMenuToggle} className="p-2 -ml-2 text-text-muted dark:text-text-muted-dark hover:text-primary transition-colors">
           <span className="material-symbols-outlined">menu</span>
@@ -83,22 +83,25 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, onSearchItemClick }) => {
       </div>
 
       <div className="hidden md:block">
-        <h1 className="text-lg font-bold text-text dark:text-text-dark">ระบบบริหารจัดการการเงิน</h1>
-        <p className="text-xs text-text-muted dark:text-text-muted-dark">โรงเรียนตัวอย่างวิทยา • ปีงบประมาณ 2567</p>
+        <h1 className="text-xl font-black tracking-tight text-slate-800 dark:text-white">ระบบบริหารจัดการการเงิน</h1>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-primary/60 dark:text-primary/40 flex items-center gap-2 mt-0.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+          โรงเรียนบ้านละหอกตะแบง
+        </p>
       </div>
 
       <div className="flex items-center gap-4">
         {/* Search */}
-        <div className="relative w-64 hidden md:block z-[60]" ref={searchRef}>
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-muted dark:text-text-muted-dark">
-            <span className="material-symbols-outlined text-[18px]">search</span>
+        <div className="relative w-72 hidden lg:block z-[60]" ref={searchRef}>
+          <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <span className="material-symbols-outlined text-[20px]">search</span>
           </span>
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => { setSearchTerm(e.target.value); setIsSearchOpen(true); }}
             onFocus={() => setIsSearchOpen(true)}
-            className="w-full bg-background-light dark:bg-background-dark text-text dark:text-text-dark border border-transparent focus:border-primary/30 rounded-full py-1.5 pl-9 pr-4 focus:ring-2 focus:ring-primary/20 text-sm placeholder-text-muted dark:placeholder-text-muted-dark outline-none transition-all"
+            className="w-full h-11 pl-11 pr-4 rounded-2xl bg-slate-100/50 dark:bg-slate-800/50 border border-transparent focus:bg-white dark:focus:bg-slate-800 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all duration-300 text-sm font-medium"
             placeholder="ค้นหารายการ, ใบเสร็จ..."
           />
           {/* Search Dropdown */}

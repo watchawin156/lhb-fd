@@ -403,26 +403,13 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const baseId = Date.now();
             const order = schoolSettings.borrowOrder || 'borrow-first';
 
-            // Order logic
-            // 1. Borrow In (Income to Target)
-            const incomeTx = {
-              id: order === 'borrow-first' ? baseId : baseId + 1000,
-              date: tx.date,
-              docNo: tx.docNo ? tx.docNo + ' (ยืมจาก)' : '',
-              description: `ยืมจาก ${getFundTitle(donor)}`,
-              fundType: tx.fundType,
-              income: shortfall,
-              expense: 0,
-              loanId: loan.id,
-              skipLoanCheck: true,
-            };
-
-            // 2. Lend Out (Expense from Source)
+            // Order logic for display (Latest First - Highest ID at top)
+            // 1. ยืมเงิน (Expense from donor) -> Top/Highest ID
             const expenseTx = {
-              id: order === 'borrow-first' ? baseId + 1000 : baseId,
+              id: baseId + 2000,
               date: tx.date,
-              docNo: tx.docNo ? tx.docNo + ' (ยืมให้)' : '',
-              description: `ยืมให้ ${getFundTitle(tx.fundType)}`,
+              docNo: tx.docNo ? tx.docNo + ' (ยืมเงิน)' : '',
+              description: `ยืมเงินให้โครงการ/งาน ${getFundTitle(tx.fundType)}`,
               fundType: donor,
               income: 0,
               expense: shortfall,
@@ -430,11 +417,24 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               skipLoanCheck: true,
             };
 
-            await doAddTransaction(incomeTx);
-            await doAddTransaction(expenseTx);
+            // 2. รับเงินยืม (Income to recipient) -> Middle ID
+            const incomeTx = {
+              id: baseId + 1000,
+              date: tx.date,
+              docNo: tx.docNo ? tx.docNo + ' (รับเงินยืม)' : '',
+              description: `รับเงินยืมจาก ${getFundTitle(donor)}`,
+              fundType: tx.fundType,
+              income: shortfall,
+              expense: 0,
+              loanId: loan.id,
+              skipLoanCheck: true,
+            };
 
-            // 3. จ่าย (Original transaction) -> Highest ID
-            tx.id = baseId + 2000;
+            await doAddTransaction(expenseTx);
+            await doAddTransaction(incomeTx);
+
+            // 3. จ่าย (Original transaction - Lowest ID)
+            tx.id = baseId;
             await doAddTransaction(tx);
 
             // Skip the final doAddTransaction since it's already done
@@ -503,37 +503,35 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           const baseId = Date.now();
           const order = schoolSettings.borrowOrder || 'borrow-first';
 
-          // 1. ยืมจาก (Income to Target)
-          const incomeTx = {
-            id: order === 'borrow-first' ? baseId : baseId + 1000,
+          // Order logic for display (Latest First - Highest ID at top)
+          // 1. ยืมเงิน (Expense from Source - Highest ID)
+          await doAddTransaction({
+            id: baseId + 2000,
             date: merged.date,
-            docNo: merged.docNo ? merged.docNo + ' (ยืมจาก)' : '',
-            description: `ยืมจาก ${getFundTitle(donor)}`,
-            fundType: merged.fundType,
-            income: shortfall,
-            expense: 0,
-            loanId: loan.id,
-            skipLoanCheck: true,
-          };
-
-          // 2. ยืมให้ (Expense from Source)
-          const expenseTx = {
-            id: order === 'borrow-first' ? baseId + 1000 : baseId,
-            date: merged.date,
-            docNo: merged.docNo ? merged.docNo + ' (ยืมให้)' : '',
-            description: `ยืมให้ ${getFundTitle(merged.fundType)}`,
+            docNo: merged.docNo ? merged.docNo + ' (ยืมเงิน)' : '',
+            description: `ยืมเงินให้โครงการ/งาน ${getFundTitle(merged.fundType)}`,
             fundType: donor,
             income: 0,
             expense: shortfall,
             loanId: loan.id,
             skipLoanCheck: true,
-          };
+          });
 
-          await doAddTransaction(incomeTx);
-          await doAddTransaction(expenseTx);
+          // 2. รับเงินยืม (Income to Target - Middle ID)
+          await doAddTransaction({
+            id: baseId + 1000,
+            date: merged.date,
+            docNo: merged.docNo ? merged.docNo + ' (รับเงินยืม)' : '',
+            description: `รับเงินยืมจาก ${getFundTitle(donor)}`,
+            fundType: merged.fundType,
+            income: shortfall,
+            expense: 0,
+            loanId: loan.id,
+            skipLoanCheck: true,
+          });
 
-          // 3. จ่าย (Original transaction)
-          merged.id = baseId + 2000;
+          // 3. จ่าย (Original transaction - Lowest ID)
+          merged.id = baseId;
         } else {
           alert(`ไม่พบหมวดเงินอื่นที่สามารถยืมมาได้ จึงจะบันทึกยอดติดลบใน ${getFundTitle(merged.fundType)}`);
         }

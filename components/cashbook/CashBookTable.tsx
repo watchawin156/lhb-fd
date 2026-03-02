@@ -83,35 +83,42 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
     };
 
     return (
-        <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 shrink-0">
-                <div className="flex justify-between items-center flex-wrap gap-4">
-                    <h3 className="font-bold text-slate-700 dark:text-white text-sm">รายการรับ - จ่าย ประจำปีงบประมาณ {fyBE}</h3>
-                    <div className="flex items-center gap-3">
-                        <select
-                            value={cashBookFilter}
-                            onChange={e => setCashBookFilter(e.target.value)}
-                            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer min-w-[200px]"
-                        >
-                            <option value="all">ทุกประเภท</option>
-                            {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => (
-                                <optgroup key={group} label={group}>
-                                    {FUND_TYPE_OPTIONS.filter(o => o.group === group).map(opt => (
-                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                    ))}
-                                </optgroup>
-                            ))}
-                        </select>
+        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-[32px] shadow-2xl shadow-slate-200/50 dark:shadow-none border border-white/40 dark:border-white/5 overflow-hidden flex flex-col animate-scale-up">
+            <div className="p-8 border-b border-slate-100 dark:border-white/5 bg-white/40 dark:bg-slate-800/20 shrink-0">
+                <div className="flex justify-between items-center flex-wrap gap-6">
+                    <div className="flex flex-col">
+                        <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight">
+                            สมุดเงินสด ปีงบประมาณ {fyBE}
+                        </h3>
+                        <p className="text-xs text-slate-400 font-bold tracking-widest uppercase mt-1">CASH BOOK TRANSACTION LOG</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <div className="relative group">
+                            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-primary text-lg pointer-events-none group-focus-within:scale-110 transition-transform">filter_list</span>
+                            <select
+                                value={cashBookFilter}
+                                onChange={e => setCashBookFilter(e.target.value)}
+                                className="pl-12 pr-6 py-3.5 rounded-2xl border-2 border-slate-100 dark:border-white/5 bg-white dark:bg-slate-800 text-[13px] font-black text-slate-700 dark:text-slate-200 outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all cursor-pointer min-w-[240px] shadow-sm appearance-none"
+                            >
+                                <option value="all">ทุกแหล่งเงิน (All Funds)</option>
+                                {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => (
+                                    <optgroup key={group} label={group}>
+                                        {FUND_TYPE_OPTIONS.filter(o => o.group === group).map(opt => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                            </select>
+                        </div>
                         <button
                             onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-                            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1 shrink-0 shadow-sm"
+                            className="px-6 py-3.5 rounded-2xl border-2 border-slate-100 dark:border-white/5 bg-white dark:bg-slate-800 text-[13px] font-black text-slate-600 dark:text-slate-300 hover:border-primary/20 hover:text-primary transition-all flex items-center gap-2 shrink-0 shadow-sm active:scale-95 group"
                         >
-                            <span className="material-symbols-outlined text-[18px]">
-                                {sortOrder === 'desc' ? 'arrow_downward' : 'arrow_upward'}
+                            <span className="material-symbols-outlined text-lg group-hover:rotate-180 transition-transform duration-500">
+                                {sortOrder === 'desc' ? 'south_east' : 'north_east'}
                             </span>
-                            {sortOrder === 'desc' ? 'ใหม่-เก่า' : 'เก่า-ใหม่'}
+                            {sortOrder === 'desc' ? 'วันที่ล่าสุด' : 'วันที่เก่าสุด'}
                         </button>
-                        <span className="text-xs text-slate-500 whitespace-nowrap">{dailyData.length} วันที่มีการเคลื่อนไหว</span>
                     </div>
                 </div>
             </div>

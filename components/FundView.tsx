@@ -214,13 +214,18 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
     const totalBalance = totalIncome - totalExpense;
 
     return (
-        <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 dark:bg-background-dark p-6 flex flex-col gap-6">
-            <div className="flex flex-col gap-6 pb-10">
+        <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 md:p-10 flex flex-col gap-10 scroll-smooth">
+            <div className="max-w-7xl mx-auto w-full flex flex-col gap-10 pb-20 animate-fade-in">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-bold text-text dark:text-text-dark flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary bg-blue-100 p-2 rounded-lg">account_balance_wallet</span>
-                        {title}
-                    </h2>
+                    <div className="flex flex-col gap-1">
+                        <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight flex items-center gap-4">
+                            <div className="w-12 h-12 flex items-center justify-center bg-primary/10 rounded-2xl">
+                                <span className="material-symbols-outlined text-primary text-2xl">account_balance_wallet</span>
+                            </div>
+                            {title}
+                        </h2>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium ml-16">ตรวจสอบสถานะและรายการย้อนหลัง</p>
+                    </div>
                     <div className="flex gap-2">
                         <div className="relative group/export z-30">
                             <button className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-text-muted rounded-lg shadow-sm hover:bg-gray-50 transition-colors" title="ส่งออกรายงาน">
@@ -239,40 +244,51 @@ const FundView: React.FC<FundViewProps> = ({ title, pageId }) => {
                 </div>
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-white dark:bg-surface-dark p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <p className="text-xs text-text-muted">รายรับทั้งหมด</p>
-                        <p className="text-xl font-bold text-blue-600">{totalIncome === 0 ? '-' : `฿${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="glass-card p-6 relative overflow-hidden group">
+                        <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:scale-110 transition-transform duration-700">
+                            <span className="material-symbols-outlined text-7xl text-blue-600">trending_up</span>
+                        </div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">รายรับทั้งหมด</p>
+                        <p className="text-3xl font-black text-blue-600 tracking-tighter">{totalIncome === 0 ? '฿0.00' : `฿${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
                     </div>
-                    <div className="bg-white dark:bg-surface-dark p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <p className="text-xs text-text-muted">รายจ่ายทั้งหมด</p>
-                        <p className="text-xl font-bold text-red-500">{totalExpense === 0 ? '-' : `฿${totalExpense.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
+                    <div className="glass-card p-6 relative overflow-hidden group">
+                        <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:scale-110 transition-transform duration-700">
+                            <span className="material-symbols-outlined text-7xl text-red-600">trending_down</span>
+                        </div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">รายจ่ายทั้งหมด</p>
+                        <p className="text-3xl font-black text-red-500 tracking-tighter">{totalExpense === 0 ? '฿0.00' : `฿${totalExpense.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
                     </div>
-                    <div className="bg-white dark:bg-surface-dark p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <p className="text-xs text-text-muted">คงเหลือสุทธิ</p>
-                        <p className="text-xl font-bold text-green-600">{totalBalance === 0 ? '-' : `฿${totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
+                    <div className="glass-card p-6 relative overflow-hidden group">
+                        <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:scale-110 transition-transform duration-700">
+                            <span className="material-symbols-outlined text-7xl text-green-600">account_balance</span>
+                        </div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">คงเหลือสุทธิ</p>
+                        <p className="text-3xl font-black text-green-600 tracking-tighter">{totalBalance === 0 ? '฿0.00' : `฿${totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
                     </div>
                 </div>
 
                 {/* Transaction Table */}
-                <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden min-h-[400px]">
-                    <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50/50">
-                        <div>
-                            <h3 className="font-bold text-text dark:text-text-dark">รายการเคลื่อนไหว (Ledger)</h3>
-                            <span className="text-xs text-text-muted">เรียงตามวันที่ล่าสุด</span>
+                <div className="glass-card overflow-hidden min-h-[500px] flex flex-col">
+                    <div className="p-6 border-b border-white/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 bg-primary/5">
+                        <div className="flex flex-col gap-1">
+                            <h3 className="font-black text-slate-800 dark:text-white text-lg tracking-tight">รายการเคลื่อนไหว (Ledger)</h3>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">เรียงตามวันที่ล่าสุด</span>
                         </div>
-                        <div className="relative w-full sm:w-64">
-                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
+                        <div className="relative w-full sm:w-72">
+                            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
                             <input
                                 type="text"
                                 placeholder="ค้นหารายการ, เลขที่, ชื่อ..."
                                 value={fundSearchQuery}
                                 onChange={(e) => setFundSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
+                                className="w-full pl-12 pr-4 py-2.5 bg-white dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-4 focus:ring-primary/10 transition-all duration-300 shadow-sm"
                             />
                         </div>
                     </div>
-                    <FundViewTable pageId={pageId} pageTransactions={pageTransactions} transactions={transactions} onRowClick={handleRowClick} />
+                    <div className="flex-1 overflow-x-auto">
+                        <FundViewTable pageId={pageId} pageTransactions={pageTransactions} transactions={transactions} onRowClick={handleRowClick} />
+                    </div>
                 </div>
             </div>
 

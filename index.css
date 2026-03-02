@@ -1,0 +1,115 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --bg-light: #f8fafc;
+  --bg-dark: #020617;
+  --surface-light: rgba(255, 255, 255, 0.8);
+  --surface-dark: rgba(15, 23, 42, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-border-dark: rgba(255, 255, 255, 0.05);
+}
+
+body {
+  font-family: 'Sarabun', 'THSarabunNew', sans-serif;
+  @apply bg-slate-50 text-slate-900 transition-colors duration-300;
+}
+
+.dark body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+/* Glassmorphism Classes */
+.glass {
+  @apply backdrop-blur-md bg-white/70 border border-white/20 shadow-xl;
+}
+
+.dark .glass {
+  @apply backdrop-blur-md bg-slate-900/70 border border-white/5 shadow-2xl;
+}
+
+.glass-card {
+  @apply backdrop-blur-lg bg-white/60 border border-white/40 shadow-sm rounded-2xl transition-all duration-300 hover:shadow-md hover:bg-white/80;
+}
+
+.dark .glass-card {
+  @apply backdrop-blur-lg bg-slate-800/40 border border-white/10 shadow-lg rounded-2xl transition-all duration-300 hover:shadow-xl hover:bg-slate-800/60;
+}
+
+/* Modern Inputs */
+.modern-input {
+  @apply w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white/50 focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all duration-200;
+}
+
+.dark .modern-input {
+  @apply border-slate-700 bg-slate-800/50 focus:bg-slate-800 focus:ring-primary/40 focus:border-primary;
+}
+
+/* Modern Buttons */
+.btn-primary {
+  @apply px-5 py-2.5 bg-primary text-white rounded-xl font-semibold shadow-lg shadow-primary/20 hover:bg-primary-dark hover:shadow-primary/40 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2;
+}
+
+.btn-secondary {
+  @apply px-5 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 hover:border-slate-300 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2;
+}
+
+.dark .btn-secondary {
+  @apply bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700;
+}
+
+/* Smooth Table */
+.modern-table {
+  @apply w-full border-separate border-spacing-0;
+}
+
+.modern-table th {
+  @apply px-4 py-3 bg-slate-50/50 text-left text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 first:rounded-tl-xl last:rounded-tr-xl;
+}
+
+.dark .modern-table th {
+  @apply bg-slate-800/50 text-slate-400 border-slate-700;
+}
+
+.modern-table td {
+  @apply px-4 py-4 border-b border-slate-50 transition-colors duration-150;
+}
+
+.dark .modern-table td {
+  @apply border-slate-800/50;
+}
+
+.modern-table tr:hover td {
+  @apply bg-slate-50/80;
+}
+
+.dark .modern-table tr:hover td {
+  @apply bg-slate-800/80;
+}
+
+/* Standard Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* Custom Nav Scrollbar */
+.nav-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nav-scroll::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full;
+}
+
+.dark .nav-scroll::-webkit-scrollbar-thumb {
+  @apply bg-slate-800;
+}

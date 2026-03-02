@@ -2,14 +2,14 @@
 import React from 'react';
 import { KPICardProps } from '../types';
 
-const StatsCard: React.FC<KPICardProps> = ({ 
-  title, 
-  value, 
-  trend, 
-  trendDirection, 
-  trendLabel, 
-  icon, 
-  iconBgClass, 
+const StatsCard: React.FC<KPICardProps> = ({
+  title,
+  value,
+  trend,
+  trendDirection,
+  trendLabel,
+  icon,
+  iconBgClass,
   iconColorClass,
   isAlert
 }) => {
@@ -20,24 +20,24 @@ const StatsCard: React.FC<KPICardProps> = ({
   };
 
   return (
-    <div className={`bg-surface dark:bg-surface-dark p-5 rounded-xl shadow-sm border border-border-light dark:border-border-dark flex flex-col justify-between h-36 relative overflow-hidden group hover:shadow-md transition-all`}>
+    <div className="glass-card p-6 flex flex-col justify-between h-40 relative overflow-hidden group">
       {/* Decorative background icon */}
-      <div className="absolute -right-4 -bottom-4 opacity-[0.05] dark:opacity-[0.08] pointer-events-none">
-        <span className="material-symbols-outlined text-8xl text-current">{icon}</span>
+      <div className="absolute -right-6 -bottom-6 opacity-[0.03] dark:opacity-[0.05] pointer-events-none group-hover:scale-110 transition-transform duration-700">
+        <span className="material-symbols-outlined text-9xl text-primary">{icon}</span>
       </div>
 
       <div className="flex justify-between items-start z-10">
-        <span className="text-text-muted dark:text-text-muted-dark font-medium text-sm">{title}</span>
-        <div className={`p-2 rounded-lg ${iconBgClass} ${iconColorClass} ${isAlert ? 'animate-pulse' : ''}`}>
-          <span className={`material-symbols-outlined text-xl ${isAlert ? 'animate-flash-red' : ''}`}>{icon}</span>
+        <span className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-wider">{title}</span>
+        <div className={`p-3 rounded-2xl ${iconBgClass} ${iconColorClass} shadow-inner`}>
+          <span className="material-symbols-outlined text-xl">{icon}</span>
         </div>
       </div>
-      
-      <div className="z-10">
-        <h2 className={`text-2xl font-bold tracking-tight mb-1 ${isAlert ? 'text-red-600 animate-flash-red' : 'text-text dark:text-text-dark'}`}>{value}</h2>
-        <div className="flex items-center gap-2 text-xs">
-             <span className={`font-medium ${getTrendColor()}`}>{trend}</span>
-             {trendLabel && <span className="text-text-muted dark:text-text-muted-dark">• {trendLabel}</span>}
+
+      <div className="z-10 mt-auto">
+        <h2 className="text-3xl font-black tracking-tighter text-slate-800 dark:text-white mb-1">{value}</h2>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 ${getTrendColor()}`}>{trend}</span>
+          {trendLabel && <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{trendLabel}</span>}
         </div>
       </div>
     </div>
