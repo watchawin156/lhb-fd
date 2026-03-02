@@ -83,7 +83,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, onSearchItemClick }) => {
       </div>
 
       <div className="hidden md:block">
-        <h1 className="text-lg font-bold text-text dark:text-text-dark">แผงควบคุมการเงิน (Executive Dashboard)</h1>
+        <h1 className="text-lg font-bold text-text dark:text-text-dark">ระบบบริหารจัดการการเงิน</h1>
         <p className="text-xs text-text-muted dark:text-text-muted-dark">โรงเรียนตัวอย่างวิทยา • ปีงบประมาณ 2567</p>
       </div>
 

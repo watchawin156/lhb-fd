@@ -386,14 +386,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             logAction('สร้างสัญญายืม', `ระบบยืมอัตโนมัติ ${shortfall} จาก ${getFundTitle(donor)} เพื่อจ่าย${getFundTitle(tx.fundType)}`, 'loan');
 
             const baseId = Date.now();
-            // record transfer transactions in sequence that makes Lend NEWEST
-            // 1. จ่าย (Original transaction) -> Saved first (Lowest ID)
-            tx.id = baseId;
-            await doAddTransaction(tx);
-
-            // 2. ยืมจาก (Income to Target) -> Middle ID (+1000)
+            // Order: Borrow In (baseId) < Lend Out (baseId+1000) < Original Spend (baseId+2000)
+            // 1. ยืมจาก (Income to Target)
             await doAddTransaction({
-              id: baseId + 1000,
+              id: baseId,
               date: tx.date,
               docNo: tx.docNo ? tx.docNo + ' (ยืมจาก)' : '',
               description: `ยืมจาก ${getFundTitle(donor)}`,
@@ -404,9 +400,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               skipLoanCheck: true,
             });
 
-            // 3. ยืมให้ (Expense from Source) -> Highest ID (+2000)
+            // 2. ยืมให้ (Expense from Source)
             await doAddTransaction({
-              id: baseId + 2000,
+              id: baseId + 1000,
               date: tx.date,
               docNo: tx.docNo ? tx.docNo + ' (ยืมให้)' : '',
               description: `ยืมให้ ${getFundTitle(tx.fundType)}`,
@@ -416,6 +412,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               loanId: loan.id,
               skipLoanCheck: true,
             });
+
+            // 3. จ่าย (Original transaction) -> Highest ID
+            tx.id = baseId + 2000;
+            await doAddTransaction(tx);
 
             // Skip the final doAddTransaction since it's already done
             if (tx.income && tx.fundType) {

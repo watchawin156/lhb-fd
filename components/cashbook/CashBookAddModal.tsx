@@ -329,9 +329,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             setIsGeneratingPDF(true);
 
             const baseId = Date.now();
-            // Reverse order: Borrow In first, Lend Out last to put Lend Out on top
-
-            // 1. ยืมจาก (Income to Target/Purpose) -> Smallest ID
+            // 1. Borrow In (ยืมจาก) -> Lowest ID
             await addTransaction({
                 id: baseId,
                 date: today,
@@ -345,9 +343,9 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 bankId: selectedBankId
             });
 
-            // 2. ยืมให้ (Expense from Source Fund) -> Largest ID (Top in New-to-Old)
+            // 2. Lend Out (ยืมให้) -> Higher ID (+1)
             await addTransaction({
-                id: baseId + 1000,
+                id: baseId + 1,
                 date: today,
                 docNo: `${loanId} (ยืมให้)`,
                 description: `ยืมให้เพื่อ ${borrowPurpose}`,
@@ -1624,47 +1622,20 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                     <span className="text-rose-500 ml-2 animate-pulse font-medium">--- กรุณาเลือก ---</span>
                                 )}
                             </label>
-                            <div className="flex gap-4 max-w-[440px] mx-auto">
+                            <div className="flex gap-2 max-w-[360px] mx-auto bg-slate-100 p-1 rounded-2xl border border-slate-200">
                                 <button
                                     type="button"
                                     onClick={() => setAddPayeeType('legal')}
-                                    className={`relative flex-1 group transition-all duration-300 ${addPayeeType === 'legal' ? 'scale-[1.02]' : ''}`}
+                                    className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${addPayeeType === 'legal' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
-                                    <div className={`flex flex-col items-center justify-center py-6 rounded-3xl border-2 transition-all gap-2 ${addPayeeType === 'legal'
-                                        ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-200'
-                                        : 'bg-white border-slate-100 text-slate-400 hover:border-blue-200 hover:text-blue-500 hover:bg-blue-50/20'
-                                        }`}>
-                                        <div className={`p-3 rounded-2xl transition-all ${addPayeeType === 'legal' ? 'bg-white/20' : 'bg-slate-50 group-hover:bg-blue-50'}`}>
-                                            <span className="material-symbols-outlined text-3xl font-black">corporate_fare</span>
-                                        </div>
-                                        <span className="text-xs font-black tracking-wide">นิติบุคคล</span>
-                                    </div>
-                                    {addPayeeType === 'legal' && (
-                                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center text-white shadow-md">
-                                            <span className="material-symbols-outlined text-[14px] font-black">check</span>
-                                        </div>
-                                    )}
+                                    นิติบุคคล
                                 </button>
-
                                 <button
                                     type="button"
                                     onClick={() => setAddPayeeType('person')}
-                                    className={`relative flex-1 group transition-all duration-300 ${addPayeeType === 'person' ? 'scale-[1.02]' : ''}`}
+                                    className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${addPayeeType === 'person' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
-                                    <div className={`flex flex-col items-center justify-center py-6 rounded-3xl border-2 transition-all gap-2 ${addPayeeType === 'person'
-                                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-xl shadow-emerald-200'
-                                        : 'bg-white border-slate-100 text-slate-400 hover:border-emerald-200 hover:text-emerald-500 hover:bg-emerald-50/20'
-                                        }`}>
-                                        <div className={`p-3 rounded-2xl transition-all ${addPayeeType === 'person' ? 'bg-white/20' : 'bg-slate-50 group-hover:bg-emerald-50'}`}>
-                                            <span className="material-symbols-outlined text-3xl font-black">person</span>
-                                        </div>
-                                        <span className="text-xs font-black tracking-wide">บุคคลธรรมดา</span>
-                                    </div>
-                                    {addPayeeType === 'person' && (
-                                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center text-white shadow-md">
-                                            <span className="material-symbols-outlined text-[14px] font-black">check</span>
-                                        </div>
-                                    )}
+                                    บุคคลธรรมดา
                                 </button>
                             </div>
                         </div>

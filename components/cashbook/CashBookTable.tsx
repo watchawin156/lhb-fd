@@ -198,7 +198,7 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                                 const currentBal = balanceMap.get(tx.id ?? tx) ?? prevCashStart;
                                 const isIncome = (tx.income || 0) > 0;
                                 const isLoan = String(tx.docNo || '').includes('LN-') || tx.loanId || String(tx.docNo || '').includes('ยืม');
-                                const isShowPdf = String(tx.docNo || '').includes('(ยืมจาก)');
+                                const isShowPdf = String(tx.docNo || '').includes('(ยืมให้)');
 
                                 const timeStr = (typeof tx.id === 'number' && tx.id > 1700000000000)
                                     ? new Date(tx.id).toLocaleTimeString('th-TH')
