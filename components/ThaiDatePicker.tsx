@@ -63,7 +63,7 @@ const ThaiDatePicker: React.FC<ThaiDatePickerProps> = ({ value, onChange, label,
         value={inputValue}
         onChange={handleInputChange}
         onBlur={handleBlur}
-        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-base outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-colors"
+        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-lg font-bold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-colors"
         placeholder="วว/ดด/ปปปป (เช่น 5/10/2568)"
       />
     </div>

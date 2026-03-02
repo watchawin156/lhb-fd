@@ -243,6 +243,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, userRole, isS
           {isCollapsed && <div className="h-px bg-border-light dark:bg-border-dark my-2 mx-2"></div>}
 
           <NavItem
+            icon="format_list_numbered"
+            label="ทะเบียนคุมเลขที่เอกสาร"
+            isActive={activePage === 'doc-registry'}
+            onClick={() => onNavigate('doc-registry')}
+            isCollapsed={isCollapsed}
+          />
+
+          <NavItem
             icon="history"
             label="ประวัติการแก้ไข (Audit Log)"
             isActive={activePage === 'audit-log'}

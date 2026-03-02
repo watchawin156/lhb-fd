@@ -16,7 +16,7 @@ interface CashBookAddModalProps {
 }
 
 const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, onTaxWarning, initialTransactionType = 'income' }) => {
-    const { transactions, addTransaction, schoolSettings, addLoan } = useSchoolData();
+    const { transactions, addTransaction, schoolSettings, addLoan, getNextDocNo } = useSchoolData();
 
     const [addTransactionType, setAddTransactionType] = useState<'income' | 'expense'>(initialTransactionType);
     const [isGroupMode, setIsGroupMode] = useState(false);
@@ -80,20 +80,23 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     // --- Macro / Automation Helper ---
     // Removed per user request
 
+    const currentFiscalYear = useMemo(() => {
+        const d = new Date(addDate);
+        const month = d.getMonth() + 1;
+        const year = d.getFullYear();
+        return (month >= 10 ? year + 1 : year) + 543;
+    }, [addDate]);
+
     // --- Inject Auto Doc Number Effect ---
     React.useEffect(() => {
         if (!isOpen) return;
-        const pfx = schoolSettings?.docNumberSettings;
-        if (!pfx) return;
 
-        if (!showBorrowMode) {
-            if (addTransactionType === 'income' && pfx.incomePrefix) {
-                setAddDocNo(prev => prev === '' || prev === pfx.expensePrefix ? pfx.incomePrefix : prev);
-            } else if (addTransactionType === 'expense' && pfx.expensePrefix) {
-                setAddDocNo(prev => prev === '' || prev === pfx.incomePrefix ? pfx.expensePrefix : prev);
-            }
+        if (showBorrowMode) {
+            setAddDocNo(getNextDocNo('borrow', currentFiscalYear));
+        } else {
+            setAddDocNo(getNextDocNo(addTransactionType, currentFiscalYear));
         }
-    }, [isOpen, addTransactionType, showBorrowMode, schoolSettings?.docNumberSettings]);
+    }, [isOpen, addTransactionType, showBorrowMode, currentFiscalYear, getNextDocNo]);
     // -------------------------------------
 
 
@@ -329,12 +332,14 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             setIsGeneratingPDF(true);
 
             const baseId = Date.now();
-            // 1. Borrow In (ยืมจาก) -> Lowest ID
+            const loanDocNo = getNextDocNo('borrow', currentFiscalYear);
+
+            // 1. Borrow In (รับเงินยืม) -> Lowest ID
             await addTransaction({
                 id: baseId,
                 date: today,
-                docNo: `${loanId} (ยืมจาก)`,
-                description: `ยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
+                docNo: loanDocNo,
+                description: `รับเงินยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
                 fundType: borrowPurpose,
                 income: borrowAmountNum,
                 expense: 0,
@@ -343,12 +348,12 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 bankId: selectedBankId
             });
 
-            // 2. Lend Out (ยืมให้) -> Higher ID (+1)
+            // 2. Lend Out (ขอยืม) -> Higher ID (+1)
             await addTransaction({
                 id: baseId + 1,
                 date: today,
-                docNo: `${loanId} (ยืมให้)`,
-                description: `ยืมให้เพื่อ ${borrowPurpose}`,
+                docNo: loanDocNo,
+                description: `ขอยืมเพื่อ ${borrowPurpose}`,
                 fundType: borrowFromFund,
                 income: 0,
                 expense: borrowAmountNum,
@@ -962,13 +967,13 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
                         {/* 2. เลือกบัญชีธนาคาร */}
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                            <label className="text-sm font-black text-slate-400 uppercase tracking-widest ml-1">
                                 2. บัญชีธนาคาร
                             </label>
                             <select
                                 value={addBankId}
                                 onChange={e => setAddBankId(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-sm font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-emerald-400 focus:shadow-lg focus:shadow-emerald-50 transition-all appearance-none cursor-pointer"
+                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-lg font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-emerald-400 focus:shadow-lg focus:shadow-emerald-50 transition-all appearance-none cursor-pointer"
                             >
                                 <option value="">-- คลิกเลือกบัญชี --</option>
                                 {schoolSettings.bankAccounts?.map(acc => (
@@ -981,14 +986,14 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         {/* 3. โครงการ / กิจกรรม */}
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                            <label className="text-sm font-black text-slate-400 uppercase tracking-widest ml-1">
                                 3. โครงการ / กิจกรรม
                             </label>
                             <input
                                 type="text"
                                 value={addProject}
                                 onChange={e => setAddProject(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-sm font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-blue-400 transition-all placeholder:text-slate-300"
+                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-lg font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-blue-400 transition-all placeholder:text-slate-300"
                                 placeholder="เช่น กิจกรรมพัฒนาคุณภาพผู้เรียน"
                             />
                         </div>
@@ -996,19 +1001,19 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                         {/* 4. วันที่ และ ที่เอกสาร */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                <label className="text-sm font-black text-slate-400 uppercase tracking-widest ml-1">
                                     4. วันที่
                                 </label>
                                 <ThaiDatePicker value={addDate} onChange={(val: string) => setAddDate(val)} />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                <label className="text-sm font-black text-slate-400 uppercase tracking-widest ml-1">
                                     5. ที่เอกสาร
                                 </label>
                                 <input
                                     type="text" value={addDocNo}
                                     onChange={e => setAddDocNo(e.target.value)}
-                                    className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-sm font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-blue-400 transition-all placeholder:text-slate-300"
+                                    className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-lg font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-blue-400 transition-all placeholder:text-slate-300"
                                     placeholder="เลขอ้างอิง"
                                 />
                             </div>
@@ -1535,13 +1540,13 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     <div className="flex items-center justify-between py-2 border-t border-slate-100 mt-2">
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-blue-500 text-sm">list_alt</span>
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
                                 {subItems.length} รายการ
                             </span>
                         </div>
                         <button type="button" onClick={addSubItem}
-                            className="flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-500 text-white text-[11px] font-black hover:bg-blue-600 transition-all shadow-md shadow-blue-100">
-                            <span className="material-symbols-outlined text-[14px]">add_circle</span>
+                            className="flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-500 text-white text-sm font-black hover:bg-blue-600 transition-all shadow-md shadow-blue-100">
+                            <span className="material-symbols-outlined text-lg">add_circle</span>
                             เพิ่มรายการ
                         </button>
                     </div>
@@ -1569,7 +1574,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                         <div className="flex-1 min-w-0">
                                             <input type="text" value={s.description}
                                                 onChange={e => updateSub(s.id, 'description', e.target.value)}
-                                                className={`w-full py-1 text-xs outline-none placeholder:text-slate-300 bg-transparent ${isHeader ? 'font-black text-slate-800' : 'font-bold text-slate-700'}`}
+                                                className={`w-full py-1 text-lg outline-none placeholder:text-slate-300 bg-transparent ${isHeader ? 'font-black text-slate-800' : 'font-bold text-slate-700'}`}
                                                 placeholder={isGroupMode ? `รายการ...` : (!s.amount ? 'เช่น บันทึกการรับเงิน...' : `รายการ...`)} />
                                         </div>
                                         <div className={`flex items-center rounded-lg px-2 py-1 border transition-all ${hasAmount
@@ -1578,7 +1583,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                             }`}>
                                             <input type="number" step="0.01" value={s.amount}
                                                 onChange={e => updateSub(s.id, 'amount', e.target.value)}
-                                                className={`w-20 py-0.5 text-xs font-black text-right outline-none bg-transparent ${hasAmount
+                                                className={`w-20 py-0.5 text-lg font-black text-right outline-none bg-transparent ${hasAmount
                                                     ? addTransactionType === 'income' ? 'text-emerald-700' : 'text-rose-700'
                                                     : 'text-slate-400'
                                                     }`}
@@ -1616,7 +1621,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     {/* Payee Type Section */}
                     {addTransactionType === 'expense' && !isGroupMode && (
                         <div className="mt-8 mb-6 pt-6 border-t-2 border-slate-50">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-5 text-center">
+                            <label className="text-sm font-black text-slate-400 uppercase tracking-[0.2em] block mb-5 text-center">
                                 ประเภทผู้รับเงิน
                                 {!addPayeeType && (
                                     <span className="text-rose-500 ml-2 animate-pulse font-medium">--- กรุณาเลือก ---</span>
@@ -1626,14 +1631,14 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                 <button
                                     type="button"
                                     onClick={() => setAddPayeeType('legal')}
-                                    className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${addPayeeType === 'legal' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    className={`flex-1 py-3 rounded-xl text-lg font-black transition-all flex items-center justify-center gap-2 ${addPayeeType === 'legal' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
                                     นิติบุคคล
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setAddPayeeType('person')}
-                                    className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${addPayeeType === 'person' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    className={`flex-1 py-3 rounded-xl text-lg font-black transition-all flex items-center justify-center gap-2 ${addPayeeType === 'person' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
                                     บุคคลธรรมดา
                                 </button>
@@ -1645,12 +1650,12 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 {/* Footer Section (Sticky) */}
                 <div className="p-6 border-t border-slate-100 shrink-0 bg-white shadow-[0_-8px_30px_rgb(0,0,0,0.04)] flex justify-between items-center">
                     <div className="text-left">
-                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">TOTAL AMOUNT</p>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-0.5">TOTAL AMOUNT</p>
                         <div className="flex items-baseline gap-1">
-                            <span className={`text-2xl font-black tracking-tighter ${addTransactionType === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            <span className={`text-4xl font-black tracking-tighter ${addTransactionType === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 {addTransactionType === 'income' ? '+' : '-'} {fmtMoney(subTotal || parseFloat(taxAmount) || parseFloat(taxManualAmount) || parseFloat(customExpenseAmount) || parseFloat(stateManualAmount) || 0)}
                             </span>
-                            <span className="text-[10px] font-bold text-slate-400">บาท</span>
+                            <span className="text-xs font-bold text-slate-400">บาท</span>
                         </div>
                     </div>
                     <div className="flex gap-3">
@@ -1659,8 +1664,8 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                             ยกเลิก
                         </button>
                         <button type="submit"
-                            className={`px-8 py-3 rounded-xl font-black text-white text-[11px] shadow-lg transition-all active:scale-95 group flex items-center gap-2 uppercase tracking-wider ${addTransactionType === 'income' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-50' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-50'}`}>
-                            <span className="material-symbols-outlined text-[16px] font-black">save</span>
+                            className={`px-8 py-3 rounded-xl font-black text-white text-sm shadow-lg transition-all active:scale-95 group flex items-center gap-2 uppercase tracking-wider ${addTransactionType === 'income' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-50' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-50'}`}>
+                            <span className="material-symbols-outlined text-lg font-black">save</span>
                             {showBorrowMode ? 'สร้างสัญญายืม' : 'บันทึกรายการ'}
                         </button>
                     </div>

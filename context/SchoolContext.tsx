@@ -72,6 +72,7 @@ interface SchoolContextType {
   resetData: () => Promise<void>;
   logAction: (action: string, details: string, module: string) => void;
   refreshTransactions: () => Promise<void>;
+  getNextDocNo: (type: 'income' | 'expense' | 'borrow', fiscalYear: number) => string;
 
   totalRevenue: number;
   totalExpense: number;
@@ -582,6 +583,33 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const getNextDocNo = useCallback((type: 'income' | 'expense' | 'borrow', fiscalYear: number) => {
+    const fyStartYear = fiscalYear - 543 - 1;
+    const fyStart = `${fyStartYear}-10-01`;
+    const fyEnd = `${fiscalYear - 543}-09-30`;
+
+    let prefix = '';
+    if (type === 'income') prefix = 'ร.';
+    else if (type === 'expense') prefix = 'จ.';
+    else if (type === 'borrow') prefix = 'ขอยืมเงิน ';
+
+    const currentFyTxs = transactions.filter(t => t.date >= fyStart && t.date <= fyEnd);
+
+    let maxNum = 0;
+    currentFyTxs.forEach(t => {
+      const docNo = t.docNo || '';
+      if (docNo.startsWith(prefix)) {
+        // Remove prefix and split by '/' to get the number part
+        const withoutPrefix = docNo.substring(prefix.length);
+        const parts = withoutPrefix.split('/');
+        const num = parseInt(parts[0]);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    });
+
+    return `${prefix}${maxNum + 1}/${fiscalYear}`;
+  }, [transactions]);
+
   return (
     <SchoolContext.Provider value={{
       receipts,
@@ -605,6 +633,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       resetData,
       logAction,
       refreshTransactions,
+      getNextDocNo,
       totalRevenue,
       totalExpense,
       cashOnHand,

@@ -16,6 +16,7 @@ import ExportReport from './components/ExportReport';
 import SystemSettings from './components/SystemSettings';
 import SchoolProjects from './components/SchoolProjects';
 import CashBookDetailModal from './components/cashbook/CashBookDetailModal';
+import DocRegistry from './components/DocRegistry';
 import { SchoolProvider } from './context/SchoolContext';
 
 const getCurrentFiscalYear = () => {
@@ -81,6 +82,8 @@ const App: React.FC = () => {
         return <SchoolProjects />;
       case 'report-fiscal-year':
         return <ExportReport />;
+      case 'doc-registry':
+        return <DocRegistry selectedFiscalYear={selectedFiscalYear} />;
       case 'settings':
         return <SystemSettings />;
       case 'dashboard':
