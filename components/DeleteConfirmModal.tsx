@@ -8,8 +8,7 @@ interface DeleteConfirmModalProps {
     onCancel: () => void;
 }
 
-const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, title, message, onConfirm, onCancel }) => {
-    const [reason, setReason] = React.useState('');
+const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, title, onConfirm, onCancel }) => {
     const [confirmText, setConfirmText] = React.useState('');
 
     if (!isOpen) return null;
@@ -18,7 +17,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, title, 
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-md scale-in-center bg-white rounded-2xl shadow-2xl border border-red-100 overflow-hidden">
+            <div className="w-full max-w-sm scale-in-center bg-white rounded-2xl shadow-2xl border border-red-100 overflow-hidden">
                 {/* Header */}
                 <div className="bg-red-50 px-6 py-4 flex items-center gap-3 border-b border-red-100">
                     <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600">
@@ -31,34 +30,25 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, title, 
 
                 {/* Body */}
                 <div className="p-6">
-                    <p className="text-gray-600 mb-4">{message}</p>
-
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <label htmlFor="delete-reason" className="block text-sm font-medium text-gray-700">
-                                เหตุผลการลบ (เพื่อบันทึกประวัติ)
-                            </label>
-                            <textarea
-                                id="delete-reason"
-                                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all placeholder:text-gray-400"
-                                placeholder="ระบุเหตุผล เช่น กรอกข้อมูลผิด, ยกเลิกกิจกรรม..."
-                                rows={3}
-                                value={reason}
-                                onChange={(e) => setReason(e.target.value)}
-                            />
-                        </div>
-
-                        <div className="pt-2 border-t border-gray-50 space-y-2">
-                            <label className="block text-sm font-bold text-red-600">
+                            <label className="block text-sm font-bold text-red-600 text-center">
                                 พิมพ์คำว่า "ยืนยัน" เพื่อทำการลบ
                             </label>
                             <input
                                 type="text"
-                                className={`w-full px-4 py-2.5 rounded-xl border-2 outline-none transition-all font-bold text-center ${isConfirmed ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 focus:border-red-400'
+                                autoFocus
+                                className={`w-full px-4 py-3 rounded-xl border-2 outline-none transition-all font-bold text-center text-lg ${isConfirmed ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 focus:border-red-400'
                                     }`}
-                                placeholder="พิมพ์ ยืนยัน ที่นี่"
+                                placeholder="ยืนยัน"
                                 value={confirmText}
                                 onChange={(e) => setConfirmText(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && isConfirmed) {
+                                        onConfirm("ลบโดยผู้ใช้");
+                                        setConfirmText('');
+                                    }
+                                }}
                             />
                         </div>
                     </div>
@@ -68,7 +58,6 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, title, 
                 <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t border-gray-100">
                     <button
                         onClick={() => {
-                            setReason('');
                             setConfirmText('');
                             onCancel();
                         }}
@@ -79,8 +68,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, title, 
                     <button
                         disabled={!isConfirmed}
                         onClick={() => {
-                            onConfirm(reason || "ไม่ได้ระบุเหตุผล");
-                            setReason('');
+                            onConfirm("ลบโดยผู้ใช้");
                             setConfirmText('');
                         }}
                         className={`px-8 py-2.5 rounded-xl font-semibold text-white shadow-lg transition-all ${isConfirmed
@@ -88,7 +76,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, title, 
                             : 'bg-gray-300 cursor-not-allowed grayscale shadow-none'
                             }`}
                     >
-                        ยืนยันการลบ
+                        ลบรายการ
                     </button>
                 </div>
             </div>
