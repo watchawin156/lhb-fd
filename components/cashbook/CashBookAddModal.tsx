@@ -327,29 +327,30 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         try {
             setIsGeneratingPDF(true);
 
-            // 1. ยืมให้ (Expense from Source Fund)
+            const baseId = Date.now();
+            // 1. ยืมจาก (Income to Target/Purpose)
             await addTransaction({
-                id: Date.now(),
-                date: today,
-                docNo: loanId, // ใช้เลขเดียวกัน
-                description: `ยืมให้เพื่อ ${borrowPurpose}`,
-                fundType: borrowFromFund,
-                income: 0,
-                expense: borrowAmountNum,
-                loanId,
-                skipLoanCheck: true,
-                bankId: selectedBankId
-            });
-
-            // 2. ยืมจาก (Income to Target/Purpose)
-            await addTransaction({
-                id: Date.now() + 1,
+                id: baseId,
                 date: today,
                 docNo: loanId, // ใช้เลขเดียวกัน
                 description: `ยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
                 fundType: borrowFromFund, // ในระบบปัจจุบันอาจจะยังเป็นกองทุนเดิมแต่เป็นรายรับ
                 income: borrowAmountNum,
                 expense: 0,
+                loanId,
+                skipLoanCheck: true,
+                bankId: selectedBankId
+            });
+
+            // 2. ยืมให้ (Expense from Source Fund)
+            await addTransaction({
+                id: baseId + 1,
+                date: today,
+                docNo: loanId, // ใช้เลขเดียวกัน
+                description: `ยืมให้เพื่อ ${borrowPurpose}`,
+                fundType: borrowFromFund,
+                income: 0,
+                expense: borrowAmountNum,
                 loanId,
                 skipLoanCheck: true,
                 bankId: selectedBankId

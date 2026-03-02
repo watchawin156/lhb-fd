@@ -385,20 +385,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setLoans(prev => [loan, ...prev]);
             logAction('สร้างสัญญายืม', `ระบบยืมอัตโนมัติ ${shortfall} จาก ${getFundTitle(donor)} เพื่อจ่าย${getFundTitle(tx.fundType)}`, 'loan');
 
+            const baseId = Date.now();
             // record transfer transactions
+            // 1. ยืมจาก (Income to Target) - User wants this first
             await doAddTransaction({
-              id: Date.now() + 1,
-              date: tx.date,
-              docNo: tx.docNo ? tx.docNo + ' (ยืม)' : '',
-              description: `ยืมให้ ${getFundTitle(tx.fundType)}`,
-              fundType: donor,
-              income: 0,
-              expense: shortfall,
-              loanId: loan.id,
-              skipLoanCheck: true,
-            });
-            await doAddTransaction({
-              id: Date.now() + 2,
+              id: baseId,
               date: tx.date,
               docNo: tx.docNo ? tx.docNo + ' (ยืม)' : '',
               description: `ยืมจาก ${getFundTitle(donor)}`,
@@ -408,6 +399,22 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               loanId: loan.id,
               skipLoanCheck: true,
             });
+
+            // 2. ยืมให้ (Expense from Source) - User wants this second
+            await doAddTransaction({
+              id: baseId + 1,
+              date: tx.date,
+              docNo: tx.docNo ? tx.docNo + ' (ยืม)' : '',
+              description: `ยืมให้ ${getFundTitle(tx.fundType)}`,
+              fundType: donor,
+              income: 0,
+              expense: shortfall,
+              loanId: loan.id,
+              skipLoanCheck: true,
+            });
+
+            // Update original transaction ID to be third
+            tx.id = baseId + 2;
           } else {
             alert(`ไม่พบหมวดเงินอื่นที่สามารถยืมมาได้ จึงจะบันทึกยอดติดลบใน ${getFundTitle(tx.fundType)}`);
           }
