@@ -329,21 +329,9 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             setIsGeneratingPDF(true);
 
             const baseId = Date.now();
-            // 1. ยืมให้ (Expense from Source Fund) -> Largest ID (+1000)
-            await addTransaction({
-                id: baseId + 1000,
-                date: today,
-                docNo: `${loanId} (ยืมให้)`,
-                description: `ยืมให้เพื่อ ${borrowPurpose}`,
-                fundType: borrowFromFund,
-                income: 0,
-                expense: borrowAmountNum,
-                loanId,
-                skipLoanCheck: true,
-                bankId: selectedBankId
-            });
+            // Reverse order: Borrow In first, Lend Out last to put Lend Out on top
 
-            // 2. ยืมจาก (Income to Target/Purpose) -> Smallest ID (+0)
+            // 1. ยืมจาก (Income to Target/Purpose) -> Smallest ID
             await addTransaction({
                 id: baseId,
                 date: today,
@@ -352,6 +340,20 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 fundType: borrowPurpose,
                 income: borrowAmountNum,
                 expense: 0,
+                loanId,
+                skipLoanCheck: true,
+                bankId: selectedBankId
+            });
+
+            // 2. ยืมให้ (Expense from Source Fund) -> Largest ID (Top in New-to-Old)
+            await addTransaction({
+                id: baseId + 1000,
+                date: today,
+                docNo: `${loanId} (ยืมให้)`,
+                description: `ยืมให้เพื่อ ${borrowPurpose}`,
+                fundType: borrowFromFund,
+                income: 0,
+                expense: borrowAmountNum,
                 loanId,
                 skipLoanCheck: true,
                 bankId: selectedBankId
@@ -1636,28 +1638,53 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     {/* Payee Type Section */}
                     {addTransactionType === 'expense' && !isGroupMode && (
                         <div className="mt-8 mb-6 pt-6 border-t-2 border-slate-50">
-                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block mb-4 ml-1">
-                                ประเภทผู้รับเงิน (กรุณาเลือก)
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-5 text-center">
+                                ประเภทผู้รับเงิน
                                 {!addPayeeType && (
-                                    <span className="text-rose-500 font-bold ml-2 italic animate-pulse">! ต้องระบุ</span>
+                                    <span className="text-rose-500 ml-2 animate-pulse font-medium">--- กรุณาเลือก ---</span>
                                 )}
                             </label>
-                            <div className="flex gap-4">
-                                <button type="button" onClick={() => setAddPayeeType('legal')}
-                                    className={`flex-1 flex flex-col items-center justify-center py-5 rounded-[2rem] border-2 transition-all duration-300 ${addPayeeType === 'legal'
-                                        ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-200 -translate-y-1'
-                                        : 'bg-white border-slate-100 text-slate-400 hover:border-blue-200 hover:text-blue-500 hover:bg-slate-50/50'
+                            <div className="flex gap-4 max-w-[440px] mx-auto">
+                                <button
+                                    type="button"
+                                    onClick={() => setAddPayeeType('legal')}
+                                    className={`relative flex-1 group transition-all duration-300 ${addPayeeType === 'legal' ? 'scale-[1.02]' : ''}`}
+                                >
+                                    <div className={`flex flex-col items-center justify-center py-6 rounded-3xl border-2 transition-all gap-2 ${addPayeeType === 'legal'
+                                        ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-200'
+                                        : 'bg-white border-slate-100 text-slate-400 hover:border-blue-200 hover:text-blue-500 hover:bg-blue-50/20'
                                         }`}>
-                                    <span className="material-symbols-outlined text-3xl mb-1">corporate_fare</span>
-                                    <span className="text-sm font-black">นิติบุคคล</span>
+                                        <div className={`p-3 rounded-2xl transition-all ${addPayeeType === 'legal' ? 'bg-white/20' : 'bg-slate-50 group-hover:bg-blue-50'}`}>
+                                            <span className="material-symbols-outlined text-3xl font-black">corporate_fare</span>
+                                        </div>
+                                        <span className="text-xs font-black tracking-wide">นิติบุคคล</span>
+                                    </div>
+                                    {addPayeeType === 'legal' && (
+                                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center text-white shadow-md">
+                                            <span className="material-symbols-outlined text-[14px] font-black">check</span>
+                                        </div>
+                                    )}
                                 </button>
-                                <button type="button" onClick={() => setAddPayeeType('person')}
-                                    className={`flex-1 flex flex-col items-center justify-center py-5 rounded-[2rem] border-2 transition-all duration-300 ${addPayeeType === 'person'
-                                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-xl shadow-emerald-200 -translate-y-1'
-                                        : 'bg-white border-slate-100 text-slate-400 hover:border-emerald-200 hover:text-emerald-500 hover:bg-slate-50/50'
+
+                                <button
+                                    type="button"
+                                    onClick={() => setAddPayeeType('person')}
+                                    className={`relative flex-1 group transition-all duration-300 ${addPayeeType === 'person' ? 'scale-[1.02]' : ''}`}
+                                >
+                                    <div className={`flex flex-col items-center justify-center py-6 rounded-3xl border-2 transition-all gap-2 ${addPayeeType === 'person'
+                                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-xl shadow-emerald-200'
+                                        : 'bg-white border-slate-100 text-slate-400 hover:border-emerald-200 hover:text-emerald-500 hover:bg-emerald-50/20'
                                         }`}>
-                                    <span className="material-symbols-outlined text-3xl mb-1">person</span>
-                                    <span className="text-sm font-black">บุคคลธรรมดา</span>
+                                        <div className={`p-3 rounded-2xl transition-all ${addPayeeType === 'person' ? 'bg-white/20' : 'bg-slate-50 group-hover:bg-emerald-50'}`}>
+                                            <span className="material-symbols-outlined text-3xl font-black">person</span>
+                                        </div>
+                                        <span className="text-xs font-black tracking-wide">บุคคลธรรมดา</span>
+                                    </div>
+                                    {addPayeeType === 'person' && (
+                                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center text-white shadow-md">
+                                            <span className="material-symbols-outlined text-[14px] font-black">check</span>
+                                        </div>
+                                    )}
                                 </button>
                             </div>
                         </div>
