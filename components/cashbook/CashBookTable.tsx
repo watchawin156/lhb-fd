@@ -43,10 +43,33 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
 
         if (!loanId) return;
 
-        const loan = loans.find(l => l.id === loanId);
+        let loan = loans.find(l => l.id === loanId);
+
+        // Reconstruct loan data from transaction if not found in memory (fixes refresh issue)
         if (!loan) {
-            alert('ไม่พบข้อมูลสัญญายืมในระบบ');
-            return;
+            const docText = docNo || tx.id;
+            const amt = (tx.income || 0) > 0 ? tx.income : tx.expense;
+
+            // Extract fromFund using Regex or fallback
+            let fromFundStr = '-';
+            const desc = String(tx.description || '');
+            const matchFrom = desc.match(/ยืมจาก\s+([^\s]+)/);
+            if (matchFrom) {
+                fromFundStr = matchFrom[1];
+            } else {
+                fromFundStr = 'แหล่งทุนอื่น';
+            }
+
+            loan = {
+                id: typeof docText === 'string' ? docText.replace(/\s*\(.*?\)\s*/g, '') : '',
+                project: FUND_TYPE_OPTIONS.find(f => f.value === tx.fundType)?.label || tx.fundType,
+                fromFund: fromFundStr,
+                requester: '-',
+                amount: amt || 0,
+                dateBorrowed: tx.date,
+                dueDate: tx.date,
+                status: 'active'
+            };
         }
 
         try {
@@ -174,13 +197,21 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                             return curTxs.map((tx: any, idx: number) => {
                                 const currentBal = balanceMap.get(tx.id ?? tx) ?? prevCashStart;
                                 const isIncome = (tx.income || 0) > 0;
-                                const isLoan = String(tx.docNo || '').includes('LN-') || tx.loanId;
+                                const isLoan = String(tx.docNo || '').includes('LN-') || tx.loanId || String(tx.docNo || '').includes('ยืม');
+                                const isShowPdf = String(tx.docNo || '').includes('(ยืมจาก)');
+
+                                const timeStr = (typeof tx.id === 'number' && tx.id > 1700000000000)
+                                    ? new Date(tx.id).toLocaleTimeString('th-TH')
+                                    : '';
 
                                 return (
                                     <tr key={tx.id || idx}
                                         onClick={() => setSelectedTx(tx)}
                                         className="hover:bg-blue-50/50 dark:hover:bg-gray-800/30 cursor-pointer transition-colors">
-                                        <td className="px-4 py-2 whitespace-nowrap">{fmtShort(tx.date)}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap">
+                                            {fmtShort(tx.date)}
+                                            {timeStr && <div className="text-[10px] text-gray-400 mt-0.5">{timeStr}</div>}
+                                        </td>
                                         <td className="px-4 py-2 font-mono text-xs">{tx.docNo || '-'}</td>
                                         <td className="px-4 py-2">
                                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${getFundBadgeColor(tx.fundType)}`}>
@@ -201,11 +232,11 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                                                     )}
                                                     <span className="truncate max-w-[200px]">{tx.description}</span>
                                                 </div>
-                                                {isLoan && (
+                                                {isShowPdf && (
                                                     <button
                                                         onClick={(e) => handleDownloadPDF(e, tx)}
                                                         className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center shrink-0"
-                                                        title="ดาวน์โหลด PDF สัญญายืม"
+                                                        title="ดาวน์โหลด PDF สัญญายืมอ้างอิง"
                                                     >
                                                         <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
                                                     </button>
