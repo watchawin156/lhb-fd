@@ -387,9 +387,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             const baseId = Date.now();
             // record transfer transactions
-            // 1. ยืมให้ (Expense from Source) - Lend out (User wants this first in term of timestamp 0s offset)
+            // 1. ยืมให้ (Expense from Source) -> Largest ID (+2000) to be on TOP in New-to-Old view
             await doAddTransaction({
-              id: baseId,
+              id: baseId + 2000,
               date: tx.date,
               docNo: tx.docNo ? tx.docNo + ' (ยืมให้)' : '',
               description: `ยืมให้ ${getFundTitle(tx.fundType)}`,
@@ -400,7 +400,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               skipLoanCheck: true,
             });
 
-            // 2. ยืมจาก (Income to Target) - Borrow in (User wants this 1s offset)
+            // 2. ยืมจาก (Income to Target) -> Middle ID (+1000)
             await doAddTransaction({
               id: baseId + 1000,
               date: tx.date,
@@ -413,8 +413,8 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               skipLoanCheck: true,
             });
 
-            // 3. จ่าย (Original transaction) - Spend (User wants this 2s offset)
-            tx.id = baseId + 2000;
+            // 3. จ่าย (Original transaction) -> Smallest ID (+0)
+            tx.id = baseId;
           } else {
             alert(`ไม่พบหมวดเงินอื่นที่สามารถยืมมาได้ จึงจะบันทึกยอดติดลบใน ${getFundTitle(tx.fundType)}`);
           }

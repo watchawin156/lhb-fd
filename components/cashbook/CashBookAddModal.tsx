@@ -329,9 +329,9 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             setIsGeneratingPDF(true);
 
             const baseId = Date.now();
-            // 1. ยืมให้ (Expense from Source Fund) - Lend Out (0s offset)
+            // 1. ยืมให้ (Expense from Source Fund) -> Largest ID (+1000)
             await addTransaction({
-                id: baseId,
+                id: baseId + 1000,
                 date: today,
                 docNo: `${loanId} (ยืมให้)`,
                 description: `ยืมให้เพื่อ ${borrowPurpose}`,
@@ -343,9 +343,9 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 bankId: selectedBankId
             });
 
-            // 2. ยืมจาก (Income to Target/Purpose) - Borrow In (1s offset)
+            // 2. ยืมจาก (Income to Target/Purpose) -> Smallest ID (+0)
             await addTransaction({
-                id: baseId + 1000,
+                id: baseId,
                 date: today,
                 docNo: `${loanId} (ยืมจาก)`,
                 description: `ยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
