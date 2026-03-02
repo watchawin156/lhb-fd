@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSchoolData } from '../context/SchoolContext';
 import { Transaction } from '../types';
 import { fmtShort, fmtMoney } from './cashbook/utils';
@@ -10,6 +10,7 @@ interface DocRegistryProps {
 
 const DocRegistry: React.FC<DocRegistryProps> = ({ selectedFiscalYear }) => {
     const { transactions } = useSchoolData();
+    const [activeType, setActiveType] = useState<'all' | 'income' | 'expense' | 'borrow'>('all');
 
     const filteredTransactions = useMemo(() => {
         return transactions.filter(t => {
@@ -118,12 +119,27 @@ const DocRegistry: React.FC<DocRegistryProps> = ({ selectedFiscalYear }) => {
                         </p>
                     </div>
                 </div>
+
+                <div className="flex items-center gap-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest hidden sm:block">เรียกดูประเภท:</label>
+                    <select
+                        value={activeType}
+                        onChange={(e) => setActiveType(e.target.value as any)}
+                        className="px-4 py-2.5 rounded-xl border-2 border-white bg-white shadow-sm text-sm font-bold text-slate-700 outline-none hover:border-blue-100 focus:border-blue-400 transition-all appearance-none cursor-pointer min-w-[200px]"
+                    >
+                        <option value="all">📁 ทะเบียนทั้งหมด</option>
+                        <option value="income">🟢 ทะเบียนคุมรายรับ (ร.)</option>
+                        <option value="expense">🔴 ทะเบียนคุมรายจ่าย (จ.)</option>
+                        <option value="borrow">🔵 ทะเบียนขอยืมเงิน (ข.)</option>
+                    </select>
+                </div>
             </div>
 
-            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {renderTable('ทะเบียนคุมรายรับ (ร.)', incomeDocs, 'input', 'text-emerald-500')}
-                {renderTable('ทะเบียนคุมรายจ่าย (จ.)', expenseDocs, 'output', 'text-rose-500')}
-                {renderTable('ทะเบียนคุมการยืมเงิน (ขอยืมเงิน)', borrowDocs, 'contract', 'text-blue-500')}
+            <div className={`flex-1 min-h-0 grid gap-6 ${activeType === 'all' ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'
+                }`}>
+                {(activeType === 'all' || activeType === 'income') && renderTable('ทะเบียนคุมรายรับ (ร.)', incomeDocs, 'input', 'text-emerald-500')}
+                {(activeType === 'all' || activeType === 'expense') && renderTable('ทะเบียนคุมรายจ่าย (จ.)', expenseDocs, 'output', 'text-rose-500')}
+                {(activeType === 'all' || activeType === 'borrow') && renderTable('ทะเบียนคุมการยืมเงิน (ขอยืมเงิน)', borrowDocs, 'contract', 'text-blue-500')}
             </div>
         </div>
     );
