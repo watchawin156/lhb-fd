@@ -333,10 +333,11 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
             const baseId = Date.now();
             const loanDocNo = getNextDocNo('borrow', currentFiscalYear);
+            const order = schoolSettings.borrowOrder || 'borrow-first';
 
-            // 1. Borrow In (รับเงินยืม) -> Lowest ID
-            await addTransaction({
-                id: baseId,
+            // 1. Borrow In (รับเงินยืม)
+            const incomeTx = {
+                id: order === 'borrow-first' ? baseId : baseId + 10,
                 date: today,
                 docNo: loanDocNo,
                 description: `รับเงินยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
@@ -346,11 +347,11 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 loanId,
                 skipLoanCheck: true,
                 bankId: selectedBankId
-            });
+            };
 
-            // 2. Lend Out (ขอยืม) -> Higher ID (+1)
-            await addTransaction({
-                id: baseId + 1,
+            // 2. Lend Out (ขอยืม)
+            const expenseTx = {
+                id: order === 'borrow-first' ? baseId + 10 : baseId,
                 date: today,
                 docNo: loanDocNo,
                 description: `ขอยืมเพื่อ ${borrowPurpose}`,
@@ -360,7 +361,10 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 loanId,
                 skipLoanCheck: true,
                 bankId: selectedBankId
-            });
+            };
+
+            await addTransaction(incomeTx);
+            await addTransaction(expenseTx);
 
             // Add loan record
             addLoan(newLoan);
@@ -1574,7 +1578,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                         <div className="flex-1 min-w-0">
                                             <input type="text" value={s.description}
                                                 onChange={e => updateSub(s.id, 'description', e.target.value)}
-                                                className={`w-full py-1 text-lg outline-none placeholder:text-slate-300 bg-transparent ${isHeader ? 'font-black text-slate-800' : 'font-bold text-slate-700'}`}
+                                                className={`w-full py-1 text-xl outline-none placeholder:text-slate-300 bg-transparent ${isHeader ? 'font-black text-slate-800' : 'font-bold text-slate-700'}`}
                                                 placeholder={isGroupMode ? `รายการ...` : (!s.amount ? 'เช่น บันทึกการรับเงิน...' : `รายการ...`)} />
                                         </div>
                                         <div className={`flex items-center rounded-lg px-2 py-1 border transition-all ${hasAmount
@@ -1583,7 +1587,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                                             }`}>
                                             <input type="number" step="0.01" value={s.amount}
                                                 onChange={e => updateSub(s.id, 'amount', e.target.value)}
-                                                className={`w-20 py-0.5 text-lg font-black text-right outline-none bg-transparent ${hasAmount
+                                                className={`w-24 py-0.5 text-xl font-black text-right outline-none bg-transparent ${hasAmount
                                                     ? addTransactionType === 'income' ? 'text-emerald-700' : 'text-rose-700'
                                                     : 'text-slate-400'
                                                     }`}

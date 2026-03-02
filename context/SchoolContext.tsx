@@ -43,7 +43,15 @@ const DEFAULT_SETTINGS: SchoolSettingsData = {
     { id: 'ba-3', name: 'บช.เงินอาหารกลางวัน (ธกส.)', bankName: 'ธนาคารเพื่อการเกษตรและสหกรณ์', accountNo: '020-2-XXXXX-X', fundTypes: ['fund-lunch'], color: 'orange' },
     { id: 'ba-4', name: 'บช.เงินรายได้สถานศึกษา', bankName: 'ธนาคารออมสิน', accountNo: '000-0-XXXXX-X', fundTypes: ['fund-school-income'], color: 'blue' },
     { id: 'ba-other', name: 'บัญชีอื่นๆ', bankName: 'อื่นๆ', accountNo: 'N/A', fundTypes: [], color: 'gray' },
-  ]
+  ],
+  borrowOrder: 'borrow-first',
+  returnOrder: 'receive-first',
+  docNumberSettings: {
+    incomePrefix: 'ร.',
+    expensePrefix: 'จ.',
+    borrowPrefix: 'ขอยืมเงิน',
+    returnPrefix: 'คืนเงินยืม',
+  },
 };
 
 // ========================================
@@ -312,31 +320,37 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // move money back if we know the funds involved
     if (loan.fromFund && loan.toFund) {
       try {
-        const returnPrefix = schoolSettings.docNumberSettings?.returnPrefix || 'คืน-';
-        // expense from the fund that received money
-        await doAddTransaction({
-          id: Date.now(),
+        const prefixes = schoolSettings.docNumberSettings;
+        const returnPrefix = prefixes?.returnPrefix || 'คืนเงินยืม';
+        const order = schoolSettings.returnOrder || 'receive-first';
+        const baseId = Date.now();
+
+        const incomeTx = {
+          id: order === 'receive-first' ? baseId : baseId + 10,
           date: txDate,
-          docNo: `${returnPrefix}${loanId}`,
-          description: `คืนเงินยืม ${loanId}`,
-          fundType: loan.toFund,
-          income: 0,
-          expense: amount,
-          loanId,
-          skipLoanCheck: true,
-        });
-        // income to the fund that lent money
-        await doAddTransaction({
-          id: Date.now() + 1,
-          date: txDate,
-          docNo: `${returnPrefix}${loanId}`,
+          docNo: `${returnPrefix} ${loanId}`,
           description: `คืนเงินยืม ${loanId}`,
           fundType: loan.fromFund,
           income: amount,
           expense: 0,
           loanId,
           skipLoanCheck: true,
-        });
+        };
+
+        const expenseTx = {
+          id: order === 'receive-first' ? baseId + 10 : baseId,
+          date: txDate,
+          docNo: `${returnPrefix} ${loanId}`,
+          description: `คืนเงินยืม ${loanId}`,
+          fundType: loan.toFund,
+          income: 0,
+          expense: amount,
+          loanId,
+          skipLoanCheck: true,
+        };
+
+        await doAddTransaction(incomeTx);
+        await doAddTransaction(expenseTx);
       } catch (e) {
         console.warn('failed to add repayment transactions', e);
       }
@@ -387,10 +401,12 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             logAction('สร้างสัญญายืม', `ระบบยืมอัตโนมัติ ${shortfall} จาก ${getFundTitle(donor)} เพื่อจ่าย${getFundTitle(tx.fundType)}`, 'loan');
 
             const baseId = Date.now();
-            // Order: Borrow In (baseId) < Lend Out (baseId+1000) < Original Spend (baseId+2000)
-            // 1. ยืมจาก (Income to Target)
-            await doAddTransaction({
-              id: baseId,
+            const order = schoolSettings.borrowOrder || 'borrow-first';
+
+            // Order logic
+            // 1. Borrow In (Income to Target)
+            const incomeTx = {
+              id: order === 'borrow-first' ? baseId : baseId + 1000,
               date: tx.date,
               docNo: tx.docNo ? tx.docNo + ' (ยืมจาก)' : '',
               description: `ยืมจาก ${getFundTitle(donor)}`,
@@ -399,11 +415,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               expense: 0,
               loanId: loan.id,
               skipLoanCheck: true,
-            });
+            };
 
-            // 2. ยืมให้ (Expense from Source)
-            await doAddTransaction({
-              id: baseId + 1000,
+            // 2. Lend Out (Expense from Source)
+            const expenseTx = {
+              id: order === 'borrow-first' ? baseId + 1000 : baseId,
               date: tx.date,
               docNo: tx.docNo ? tx.docNo + ' (ยืมให้)' : '',
               description: `ยืมให้ ${getFundTitle(tx.fundType)}`,
@@ -412,7 +428,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               expense: shortfall,
               loanId: loan.id,
               skipLoanCheck: true,
-            });
+            };
+
+            await doAddTransaction(incomeTx);
+            await doAddTransaction(expenseTx);
 
             // 3. จ่าย (Original transaction) -> Highest ID
             tx.id = baseId + 2000;
@@ -480,23 +499,13 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           };
           setLoans(prev => [loan, ...prev]);
           logAction('สร้างสัญญายืม', `ระบบยืมอัตโนมัติ ${shortfall} จาก ${getFundTitle(donor)} เพื่อจ่าย${getFundTitle(merged.fundType)}`, 'loan');
-          const baseId = Date.now();
-          // 1. ยืมให้ (Expense from Source)
-          await doAddTransaction({
-            id: baseId,
-            date: merged.date,
-            docNo: merged.docNo ? merged.docNo + ' (ยืมให้)' : '',
-            description: `ยืมให้ ${getFundTitle(merged.fundType)}`,
-            fundType: donor,
-            income: 0,
-            expense: shortfall,
-            loanId: loan.id,
-            skipLoanCheck: true,
-          });
 
-          // 2. ยืมจาก (Income to Target)
-          await doAddTransaction({
-            id: baseId + 1000,
+          const baseId = Date.now();
+          const order = schoolSettings.borrowOrder || 'borrow-first';
+
+          // 1. ยืมจาก (Income to Target)
+          const incomeTx = {
+            id: order === 'borrow-first' ? baseId : baseId + 1000,
             date: merged.date,
             docNo: merged.docNo ? merged.docNo + ' (ยืมจาก)' : '',
             description: `ยืมจาก ${getFundTitle(donor)}`,
@@ -505,7 +514,23 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             expense: 0,
             loanId: loan.id,
             skipLoanCheck: true,
-          });
+          };
+
+          // 2. ยืมให้ (Expense from Source)
+          const expenseTx = {
+            id: order === 'borrow-first' ? baseId + 1000 : baseId,
+            date: merged.date,
+            docNo: merged.docNo ? merged.docNo + ' (ยืมให้)' : '',
+            description: `ยืมให้ ${getFundTitle(merged.fundType)}`,
+            fundType: donor,
+            income: 0,
+            expense: shortfall,
+            loanId: loan.id,
+            skipLoanCheck: true,
+          };
+
+          await doAddTransaction(incomeTx);
+          await doAddTransaction(expenseTx);
 
           // 3. จ่าย (Original transaction)
           merged.id = baseId + 2000;
@@ -583,15 +608,22 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const getNextDocNo = useCallback((type: 'income' | 'expense' | 'borrow', fiscalYear: number) => {
+  const getNextDocNo = useCallback((type: 'income' | 'expense' | 'borrow' | 'return', fiscalYear: number) => {
     const fyStartYear = fiscalYear - 543 - 1;
     const fyStart = `${fyStartYear}-10-01`;
     const fyEnd = `${fiscalYear - 543}-09-30`;
 
+    const prefixes = schoolSettings.docNumberSettings;
     let prefix = '';
-    if (type === 'income') prefix = 'ร.';
-    else if (type === 'expense') prefix = 'จ.';
-    else if (type === 'borrow') prefix = 'ขอยืมเงิน ';
+    if (type === 'income') prefix = prefixes?.incomePrefix || 'ร.';
+    else if (type === 'expense') prefix = prefixes?.expensePrefix || 'จ.';
+    else if (type === 'borrow') prefix = prefixes?.borrowPrefix || 'ขอยืมเงิน';
+    else if (type === 'return') prefix = prefixes?.returnPrefix || 'คืนเงินยืม';
+
+    // Add space if not present for borrow/return if requested (user asked for "ขอยืมเงิน 1/ปีงบประมาณ")
+    if (type === 'borrow' || type === 'return') {
+      if (prefix && !prefix.endsWith(' ')) prefix += ' ';
+    }
 
     const currentFyTxs = transactions.filter(t => t.date >= fyStart && t.date <= fyEnd);
 
@@ -602,13 +634,14 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // Remove prefix and split by '/' to get the number part
         const withoutPrefix = docNo.substring(prefix.length);
         const parts = withoutPrefix.split('/');
-        const num = parseInt(parts[0]);
+        const numPart = parts[0].trim();
+        const num = parseInt(numPart);
         if (!isNaN(num) && num > maxNum) maxNum = num;
       }
     });
 
     return `${prefix}${maxNum + 1}/${fiscalYear}`;
-  }, [transactions]);
+  }, [transactions, schoolSettings.docNumberSettings]);
 
   return (
     <SchoolContext.Provider value={{

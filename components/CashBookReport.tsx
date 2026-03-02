@@ -195,6 +195,9 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
             let currentPrevCash = prevCash;
 
             const uniqueDays = Array.from(new Set(curTxs.map((t: any) => t.date))).sort();
+            // Process days in chronological order to calculate the running balance correctly,
+            // then we'll reverse the final dailyData for display.
+
             let runAccRec = { cash: 0, budget: 0, revenue: 0, nonBudget: 0 };
             let runAccPay = { cash: 0, budget: 0, revenue: 0, nonBudget: 0 };
 
@@ -247,7 +250,10 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                 uniqueDays.forEach(date => {
                     const txsToday = curTxs.filter((t: any) => t.date === date);
                     // กรอง transactions "ยกยอดมา" ออกจากรายการวันนี้ (เพราะใช้ calculated breakdown แล้ว)
-                    const realTxsToday = txsToday.filter((t: any) => !t.description?.includes('ยกยอดมา'));
+                    const realTxsToday = txsToday
+                        .filter((t: any) => !t.description?.includes('ยกยอดมา'))
+                        .sort((a, b) => b.id - a.id); // Latest time (ID) first
+
 
                     const receipts: any[] = [], payments: any[] = [];
                     realTxsToday.forEach((t: any) => {
@@ -288,10 +294,18 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
             let bookNo = 1; // Assuming 1 for annual view
 
             const totalRecYear = { cash: dailyData.reduce((s, d) => s + (d.totalRec?.cash || 0), 0) };
-            const totalPayYear = { cash: dailyData.reduce((s, d) => s + (d.totalPay?.cash || 0), 0) };
+            const totalPayYear = { cash: dailyData.reduce((s, d) => s + (d.totalPay?.total_sum || d.totalPay?.cash || 0), 0) };
 
-            return { fyBE, bookNo, dailyData, prevCashStart: prevCash, yodYokPaiEnd: currentPrevCash, totalRecYear, totalPayYear };
-        }, [selectedFiscalYear, transactions]);
+            return {
+                fyBE,
+                bookNo,
+                dailyData: [...dailyData].reverse(),
+                prevCashStart: prevCash,
+                yodYokPaiEnd: currentPrevCash,
+                totalRecYear,
+                totalPayYear
+            };
+        }, [selectedFiscalYear, transactions, schoolSettings]);
 
     const handlePDF = async () => {
         setLoading(true);

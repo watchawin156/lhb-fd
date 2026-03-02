@@ -126,6 +126,8 @@ export interface SchoolSettingsData {
     borrowPrefix: string;
     returnPrefix: string;
   };
+  borrowOrder?: 'borrow-first' | 'spend-first'; // 'borrow-first': รับเงินยืมก่อนจ่าย, 'spend-first': จ่ายก่อนรับเงินยืม
+  returnOrder?: 'receive-first' | 'deposit-first'; // 'receive-first': รับคืนก่อนย้ายฝาก, 'deposit-first': ย้ายฝากก่อนรับคืน
 }
 
 export interface AuditLogEntry {

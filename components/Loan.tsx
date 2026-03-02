@@ -320,21 +320,21 @@ const Loan: React.FC = () => {
                                         <span className="font-semibold text-text dark:text-text-dark">฿{(loan.returnedAmount || 0).toLocaleString()}</span>
                                     </div>
                                     <div className="bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700/50 rounded-lg p-3 flex justify-between items-center">
-                                        <span className="text-xs font-semibold text-amber-900 dark:text-amber-200">ยอดคงค้าง:</span>
-                                        <span className="font-bold text-lg text-amber-700 dark:text-amber-300">฿{outstanding.toLocaleString()}</span>
+                                        <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">ยอดคงค้าง:</span>
+                                        <span className="font-bold text-2xl text-amber-700 dark:text-amber-300">฿{outstanding.toLocaleString()}</span>
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-text-muted">จำนวนเงินที่จะคืน</label>
+                                    <label className="text-sm font-semibold text-text-muted">จำนวนเงินที่จะคืน</label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted font-medium">฿</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xl text-text-muted font-medium">฿</span>
                                         <input
                                             type="number"
                                             value={returnAmount}
                                             onChange={(e) => setReturnAmount(e.target.value)}
                                             max={outstanding}
                                             step="0.01"
-                                            className="w-full p-2.5 pl-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-surface-dark outline-none focus:border-green-500"
+                                            className="w-full p-3 pl-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-surface-dark outline-none focus:border-green-500 text-2xl font-bold text-right"
                                             placeholder="0.00"
                                         />
                                     </div>

@@ -9,6 +9,7 @@ const SystemSettings: React.FC = () => {
     // Modals state
     const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
     const [isDocNumModalOpen, setIsDocNumModalOpen] = useState(false);
+    const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
 
     // Backup & Restore State
     const [backupStatus, setBackupStatus] = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
@@ -24,6 +25,12 @@ const SystemSettings: React.FC = () => {
         expensePrefix: '',
         borrowPrefix: '',
         returnPrefix: ''
+    });
+
+    // Recording Order State
+    const [orderSettings, setOrderSettings] = useState({
+        borrowOrder: 'borrow-first' as 'borrow-first' | 'spend-first',
+        returnOrder: 'receive-first' as 'receive-first' | 'deposit-first'
     });
 
     // Modal Notifications
@@ -47,6 +54,12 @@ const SystemSettings: React.FC = () => {
     useEffect(() => {
         if (schoolSettings.docNumberSettings) {
             setDocPrefixes(schoolSettings.docNumberSettings);
+        }
+        if (schoolSettings.borrowOrder || schoolSettings.returnOrder) {
+            setOrderSettings({
+                borrowOrder: schoolSettings.borrowOrder || 'borrow-first',
+                returnOrder: schoolSettings.returnOrder || 'receive-first'
+            });
         }
     }, [schoolSettings]);
 
@@ -144,6 +157,15 @@ const SystemSettings: React.FC = () => {
         setIsDocNumModalOpen(false);
     };
 
+    const handleSaveOrderSettings = async () => {
+        await updateSchoolSettings({
+            borrowOrder: orderSettings.borrowOrder,
+            returnOrder: orderSettings.returnOrder
+        });
+        showAlert('บันทึกสำเร็จ', 'ตั้งค่าลำดับการบันทึกเรียบร้อยแล้ว', 'success');
+        setIsOrderModalOpen(false);
+    };
+
     const lastTs = Number(localStorage.getItem('lhb_last_auto_backup') || '0');
     const lastStr = lastTs
         ? new Date(lastTs).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })
@@ -198,6 +220,18 @@ const SystemSettings: React.FC = () => {
                         </div>
                         <h3 className="text-lg font-bold text-gray-800 mb-2">ตั้งค่าเลขที่เอกสารอัตโนมัติ</h3>
                         <p className="text-sm text-gray-500">กำหนดรูปแบบตัวย่อสำหรับการรันเลขที่เอกสารอัตโนมัติ (รายรับ, จ่าย, ยืม, คืน)</p>
+                    </button>
+
+                    {/* Recording Order Card */}
+                    <button
+                        onClick={() => setIsOrderModalOpen(true)}
+                        className="bg-white hover:bg-gray-50 dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-200 p-6 flex flex-col items-center text-center transition-all hover:-translate-y-1 hover:shadow-md group"
+                    >
+                        <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <span className="material-symbols-outlined text-3xl text-orange-600">low_priority</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-800 mb-2">ลำดับการบันทึกรายการ</h3>
+                        <p className="text-sm text-gray-500">กำหนดลำดับความสำคัญของรายการที่เกิดขึ้นพร้อมกัน เช่น การยืมเงินและการคืนเงิน</p>
                     </button>
                 </div>
 
@@ -396,6 +430,72 @@ const SystemSettings: React.FC = () => {
                                         className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition"
                                     >
                                         บันทึกการตั้งค่า
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- Recording Order Modal --- */}
+                {isOrderModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-fade-in">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-scale-in">
+                            <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                                <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-orange-600">low_priority</span>
+                                    ตั้งค่าลำดับการบันทึกรายการ
+                                </h3>
+                                <button onClick={() => setIsOrderModalOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-6">
+                                <div>
+                                    <label className="text-sm font-bold text-gray-700 block mb-3">กรณี "จ่ายที่มีการยืมเงิน":</label>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <button
+                                            onClick={() => setOrderSettings({ ...orderSettings, borrowOrder: 'borrow-first' })}
+                                            className={`p-4 rounded-xl border-2 text-left transition-all ${orderSettings.borrowOrder === 'borrow-first' ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-50' : 'border-gray-100 hover:border-gray-200'}`}
+                                        >
+                                            <p className="font-bold text-sm text-blue-800">1. รับเงินยืมก่อน → 2. จ่ายออก</p>
+                                            <p className="text-xs text-blue-600/70 mt-1">บันทึกรายการรับเงินเข้าบัญชีก่อน แล้วจึงบันทึกรายการจ่าย</p>
+                                        </button>
+                                        <button
+                                            onClick={() => setOrderSettings({ ...orderSettings, borrowOrder: 'spend-first' })}
+                                            className={`p-4 rounded-xl border-2 text-left transition-all ${orderSettings.borrowOrder === 'spend-first' ? 'border-orange-500 bg-orange-50 ring-4 ring-orange-50' : 'border-gray-100 hover:border-gray-200'}`}
+                                        >
+                                            <p className="font-bold text-sm text-orange-800">1. จ่ายออกก่อน → 2. รับเงินยืมทีหลัง</p>
+                                            <p className="text-xs text-orange-600/70 mt-1">บันทึกรายการจ่ายก่อน แล้วจึงบันทึกการรับยืมชดเชย (อาจทำให้ยอดชั่วคราวติดลบ)</p>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-sm font-bold text-gray-700 block mb-3">กรณี "การคืนเงินยืม":</label>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <button
+                                            onClick={() => setOrderSettings({ ...orderSettings, returnOrder: 'receive-first' })}
+                                            className={`p-4 rounded-xl border-2 text-left transition-all ${orderSettings.returnOrder === 'receive-first' ? 'border-emerald-500 bg-emerald-50 ring-4 ring-emerald-50' : 'border-gray-100 hover:border-gray-200'}`}
+                                        >
+                                            <p className="font-bold text-sm text-emerald-800">1. รับคืนก่อน → 2. นำฝากธนาคาร</p>
+                                        </button>
+                                        <button
+                                            onClick={() => setOrderSettings({ ...orderSettings, returnOrder: 'deposit-first' })}
+                                            className={`p-4 rounded-xl border-2 text-left transition-all ${orderSettings.returnOrder === 'deposit-first' ? 'border-purple-500 bg-purple-50 ring-4 ring-purple-50' : 'border-gray-100 hover:border-gray-200'}`}
+                                        >
+                                            <p className="font-bold text-sm text-purple-800">1. นำฝากธนาคารก่อน → 2. รับคืนทีหลัง</p>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4">
+                                    <button
+                                        onClick={handleSaveOrderSettings}
+                                        className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black hover:bg-slate-900 transition shadow-lg shadow-slate-200"
+                                    >
+                                        บันทึกการตั้งค่าลำดับ
                                     </button>
                                 </div>
                             </div>
