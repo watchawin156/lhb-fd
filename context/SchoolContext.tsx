@@ -387,22 +387,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             const baseId = Date.now();
             // record transfer transactions
-            // 1. ยืมจาก (Income to Target) - User wants this first
+            // 1. ยืมให้ (Expense from Source) - Lend out (User wants this first in term of timestamp 0s offset)
             await doAddTransaction({
               id: baseId,
-              date: tx.date,
-              docNo: tx.docNo ? tx.docNo + ' (ยืมจาก)' : '',
-              description: `ยืมจาก ${getFundTitle(donor)}`,
-              fundType: tx.fundType,
-              income: shortfall,
-              expense: 0,
-              loanId: loan.id,
-              skipLoanCheck: true,
-            });
-
-            // 2. ยืมให้ (Expense from Source) - User wants this second
-            await doAddTransaction({
-              id: baseId + 1,
               date: tx.date,
               docNo: tx.docNo ? tx.docNo + ' (ยืมให้)' : '',
               description: `ยืมให้ ${getFundTitle(tx.fundType)}`,
@@ -413,8 +400,21 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               skipLoanCheck: true,
             });
 
-            // Update original transaction ID to be third
-            tx.id = baseId + 2;
+            // 2. ยืมจาก (Income to Target) - Borrow in (User wants this 1s offset)
+            await doAddTransaction({
+              id: baseId + 1000,
+              date: tx.date,
+              docNo: tx.docNo ? tx.docNo + ' (ยืมจาก)' : '',
+              description: `ยืมจาก ${getFundTitle(donor)}`,
+              fundType: tx.fundType,
+              income: shortfall,
+              expense: 0,
+              loanId: loan.id,
+              skipLoanCheck: true,
+            });
+
+            // 3. จ่าย (Original transaction) - Spend (User wants this 2s offset)
+            tx.id = baseId + 2000;
           } else {
             alert(`ไม่พบหมวดเงินอื่นที่สามารถยืมมาได้ จึงจะบันทึกยอดติดลบใน ${getFundTitle(tx.fundType)}`);
           }
@@ -473,22 +473,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setLoans(prev => [loan, ...prev]);
           logAction('สร้างสัญญายืม', `ระบบยืมอัตโนมัติ ${shortfall} จาก ${getFundTitle(donor)} เพื่อจ่าย${getFundTitle(merged.fundType)}`, 'loan');
           const baseId = Date.now();
-          // 1. ยืมจาก (Income to Target)
+          // 1. ยืมให้ (Expense from Source)
           await doAddTransaction({
             id: baseId,
-            date: merged.date,
-            docNo: merged.docNo ? merged.docNo + ' (ยืมจาก)' : '',
-            description: `ยืมจาก ${getFundTitle(donor)}`,
-            fundType: merged.fundType,
-            income: shortfall,
-            expense: 0,
-            loanId: loan.id,
-            skipLoanCheck: true,
-          });
-
-          // 2. ยืมให้ (Expense from Source)
-          await doAddTransaction({
-            id: baseId + 1,
             date: merged.date,
             docNo: merged.docNo ? merged.docNo + ' (ยืมให้)' : '',
             description: `ยืมให้ ${getFundTitle(merged.fundType)}`,
@@ -499,8 +486,21 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             skipLoanCheck: true,
           });
 
-          // Update original modified transaction to be third
-          merged.id = baseId + 2;
+          // 2. ยืมจาก (Income to Target)
+          await doAddTransaction({
+            id: baseId + 1000,
+            date: merged.date,
+            docNo: merged.docNo ? merged.docNo + ' (ยืมจาก)' : '',
+            description: `ยืมจาก ${getFundTitle(donor)}`,
+            fundType: merged.fundType,
+            income: shortfall,
+            expense: 0,
+            loanId: loan.id,
+            skipLoanCheck: true,
+          });
+
+          // 3. จ่าย (Original transaction)
+          merged.id = baseId + 2000;
         } else {
           alert(`ไม่พบหมวดเงินอื่นที่สามารถยืมมาได้ จึงจะบันทึกยอดติดลบใน ${getFundTitle(merged.fundType)}`);
         }

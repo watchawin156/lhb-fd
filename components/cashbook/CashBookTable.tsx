@@ -2,6 +2,7 @@ import React from 'react';
 import { FUND_TYPE_OPTIONS } from '../../utils';
 import { fmtShort, fmtMoney } from './utils';
 import { useSchoolData } from '../../context/SchoolContext';
+import { buildLoanDocPDF, openBlob } from '../loanPdfBuilder';
 
 interface CashBookTableProps {
     fyBE: number;
@@ -32,7 +33,31 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
     totalPayYear,
     yodYokPaiEnd
 }) => {
-    const { schoolSettings } = useSchoolData();
+    const { schoolSettings, loans } = useSchoolData();
+
+    const handleDownloadPDF = async (e: React.MouseEvent, tx: any) => {
+        e.stopPropagation();
+        const docNo = String(tx.docNo || '');
+        const loanIdMatch = docNo.match(/(LN(?:-AUTO)?-[A-Za-z0-9-]+)/);
+        const loanId = tx.loanId || (loanIdMatch ? loanIdMatch[1] : '');
+
+        if (!loanId) return;
+
+        const loan = loans.find(l => l.id === loanId);
+        if (!loan) {
+            alert('ไม่พบข้อมูลสัญญายืมในระบบ');
+            return;
+        }
+
+        try {
+            const isReturn = docNo.includes('(คืน)') || String(tx.description || '').includes('คืน');
+            const pdfBytes = await buildLoanDocPDF(loan, isReturn, schoolSettings, tx.date);
+            openBlob(pdfBytes);
+        } catch (err) {
+            console.error(err);
+            alert('เกิดข้อผิดพลาดในการสร้าง PDF');
+        }
+    };
 
     return (
         <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
@@ -149,6 +174,8 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                             return curTxs.map((tx: any, idx: number) => {
                                 const currentBal = balanceMap.get(tx.id ?? tx) ?? prevCashStart;
                                 const isIncome = (tx.income || 0) > 0;
+                                const isLoan = String(tx.docNo || '').includes('LN-') || tx.loanId;
+
                                 return (
                                     <tr key={tx.id || idx}
                                         onClick={() => setSelectedTx(tx)}
@@ -164,14 +191,25 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                                             {schoolSettings.bankAccounts?.find(b => b.id === tx.bankId)?.name || '-'}
                                         </td>
                                         <td className="px-4 py-2">
-                                            <div className="flex items-center gap-2">
-                                                {tx.docNo?.includes('LN-') && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200" title="รายการที่เกี่ยวกับการยืมเงิน">
-                                                        <span className="material-symbols-outlined text-sm">currency_exchange</span>
-                                                        ยืม
-                                                    </span>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    {isLoan && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200" title="รายการที่เกี่ยวกับการยืมเงิน">
+                                                            <span className="material-symbols-outlined text-xs">currency_exchange</span>
+                                                            ยืม
+                                                        </span>
+                                                    )}
+                                                    <span className="truncate max-w-[200px]">{tx.description}</span>
+                                                </div>
+                                                {isLoan && (
+                                                    <button
+                                                        onClick={(e) => handleDownloadPDF(e, tx)}
+                                                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center shrink-0"
+                                                        title="ดาวน์โหลด PDF สัญญายืม"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                                                    </button>
                                                 )}
-                                                <span>{tx.description}</span>
                                             </div>
                                         </td>
                                         <td className="px-4 py-2 text-right text-green-600">{isIncome ? fmtMoney(tx.income) : '-'}</td>
@@ -181,6 +219,7 @@ const CashBookTable: React.FC<CashBookTableProps> = ({
                                 );
                             });
                         })()}
+
 
                         <tr className="font-bold border-t border-slate-200 sticky bottom-0 z-10 bg-white/95 backdrop-blur-sm shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                             <td colSpan={5} className="px-4 py-4 text-right text-slate-700 bg-white">รวมรับ - จ่ายตลอดปีงบประมาณ</td>

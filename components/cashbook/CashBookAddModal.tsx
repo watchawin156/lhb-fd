@@ -33,6 +33,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
 
     // Shared header fields
     const [addDate, setAddDate] = useState(new Date().toISOString().slice(0, 10));
+    const [addProject, setAddProject] = useState(''); // New field for Project
     const [addFundType, setAddFundType] = useState('fund-subsidy');
     const [isFundDropdownOpen, setIsFundDropdownOpen] = useState(false);
     const [isEditingFund, setIsEditingFund] = useState(false);
@@ -328,29 +329,29 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             setIsGeneratingPDF(true);
 
             const baseId = Date.now();
-            // 1. ยืมจาก (Income to Target/Purpose)
+            // 1. ยืมให้ (Expense from Source Fund) - Lend Out (0s offset)
             await addTransaction({
                 id: baseId,
                 date: today,
-                docNo: `${loanId} (ยืมจาก)`, // เพิ่ม (ยืมจาก)
-                description: `ยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
-                fundType: borrowFromFund, // ในระบบปัจจุบันอาจจะยังเป็นกองทุนเดิมแต่เป็นรายรับ
-                income: borrowAmountNum,
-                expense: 0,
+                docNo: `${loanId} (ยืมให้)`,
+                description: `ยืมให้เพื่อ ${borrowPurpose}`,
+                fundType: borrowFromFund,
+                income: 0,
+                expense: borrowAmountNum,
                 loanId,
                 skipLoanCheck: true,
                 bankId: selectedBankId
             });
 
-            // 2. ยืมให้ (Expense from Source Fund)
+            // 2. ยืมจาก (Income to Target/Purpose) - Borrow In (1s offset)
             await addTransaction({
-                id: baseId + 1,
+                id: baseId + 1000,
                 date: today,
-                docNo: `${loanId} (ยืมให้)`, // เพิ่ม (ยืมให้)
-                description: `ยืมให้เพื่อ ${borrowPurpose}`,
-                fundType: borrowFromFund,
-                income: 0,
-                expense: borrowAmountNum,
+                docNo: `${loanId} (ยืมจาก)`,
+                description: `ยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
+                fundType: borrowPurpose,
+                income: borrowAmountNum,
+                expense: 0,
                 loanId,
                 skipLoanCheck: true,
                 bankId: selectedBankId
@@ -813,11 +814,14 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 return; // Stop processing and return if validation fails
             }
 
+            const baseId = Date.now();
+            const itemDesc = addProject.trim() ? `[${addProject.trim()}] ${s.description}` : s.description;
+
             addTransaction({
-                id: Date.now() + idx,
+                id: baseId + (idx * 2000), // Ensure spread if multiple
                 date: addDate,
                 docNo: addDocNo,
-                description: s.description,
+                description: itemDesc,
                 fundType: finalFundType,
                 income: addTransactionType === 'income' ? amt : 0,
                 expense: addTransactionType === 'expense' ? amt : 0,
@@ -831,6 +835,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         onClose();
         setSubItems([createSubItem()]);
         setAddDate(new Date().toISOString().slice(0, 10));
+        setAddProject('');
         setAddDocNo('');
         setAddPayeeType(null);
         setSelectedTaxIncomeId(null);
@@ -843,232 +848,189 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in">
             <form onSubmit={handleAddSubmit}
-                className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[94vh] min-h-[80vh] flex flex-col overflow-hidden animate-scale-in mx-4">
+                className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[96vh] min-h-[85vh] flex flex-col overflow-hidden animate-scale-in mx-4 border border-white/20">
 
-                {/* Top */}
-                <div className="px-8 pt-6 pb-4 shrink-0">
-                    <div className="flex justify-between items-center mb-2">
-                        <div>
-                            <p className="text-sm text-gray-400">สมุดเงินสด</p>
-                            <h2 className="text-2xl font-bold text-gray-900">
-                                {showBorrowMode ? 'ยืมเงิน' : 'เพิ่มรายการ'}
-                            </h2>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {/* Transaction Type Toggle or Borrow Toggle */}
-                            {!showBorrowMode ? (
-                                <>
-                                    {/* สวิตช์ รายการเดียว/กลุ่ม */}
-                                    <span className={`text-xs font-semibold ${!isGroupMode ? 'text-blue-600' : 'text-gray-300'}`}>เดี่ยว</span>
-                                    <button type="button"
-                                        onClick={() => setIsGroupMode(!isGroupMode)}
-                                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${isGroupMode ? 'bg-purple-500' : 'bg-blue-500'}`}>
-                                        <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isGroupMode ? 'translate-x-[22px]' : 'translate-x-0.5'}`}></div>
-                                    </button>
-                                    <span className={`text-xs font-semibold ${isGroupMode ? 'text-purple-600' : 'text-gray-300'}`}>กลุ่ม</span>
-                                    <span className="mx-1 text-gray-200">|</span>
-                                </>
-                            ) : null}
-
-                            {/* Borrow Toggle Button was here, removed per user request */}
-
-                            <button type="button" onClick={onClose}
-                                className="text-blue-500 hover:text-blue-700 text-sm font-semibold">ปิด</button>
-                        </div>
+                {/* Header */}
+                <div className="px-8 pt-6 pb-4 shrink-0 flex justify-between items-center">
+                    <div>
+                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest opacity-70">สมุดเงินสด</p>
+                        <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+                            {showBorrowMode ? 'ขอยืมเงิน' : 'เพิ่มรายการ'}
+                        </h2>
                     </div>
-                    {/* Expense Type Toggle */}
-                    {/* The user requested to hide the toggle buttons entirely. */}
+                    <div className="flex items-center gap-4">
+                        {!showBorrowMode && (
+                            <div className="flex items-center bg-gray-100 p-1 rounded-full border border-gray-200">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsGroupMode(false)}
+                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!isGroupMode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                >เดี่ยว</button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsGroupMode(true)}
+                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${isGroupMode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                >กลุ่ม</button>
+                            </div>
+                        )}
+                        <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all border border-slate-200">
+                            <span className="material-symbols-outlined text-xl">close</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Scrollable content */}
-                <div className="flex-1 overflow-y-auto px-8">
-
-                    {/* Borrow UI removed since modal no longer supports swapping to borrow mode */}
-
-                    {showBorrowMode && borrowSubmitted && (
-                        <div className="text-center py-16">
-                            <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto">
-                                <span className="material-symbols-outlined text-5xl text-green-600">check</span>
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mt-4">สร้างเอกสารการยืมสำเร็จ</h3>
-                            <p className="mt-2 text-gray-600">จำนวนเงิน: ฿{fmtMoney(borrowAmountNum)}</p>
-                            <p className="text-gray-600">วัตถุประสงค์: {borrowPurpose}</p>
-                            {borrowAmountNum > fundBalance && (
-                                <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 mt-3">
-                                    <p className="text-amber-900 text-sm">
-                                        <span className="font-semibold">⚠️ จำนวนเงินที่ขาดไป:</span> {fmtMoney(shortfallAmount)} บาท
-                                    </p>
+                <div className="flex-1 overflow-y-auto px-8 py-2 custom-scrollbar">
+                    {/* Top Section: Fund / Bank (Row 1) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                        {/* 1. หมวดเงิน */}
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
+                                <span className="material-symbols-outlined text-sm text-indigo-500">account_balance_wallet</span>
+                                1. หมวดเงิน
+                            </label>
+                            {(!isEditingFund && !isGroupMode) ? (
+                                <div
+                                    onDoubleClick={() => setIsEditingFund(true)}
+                                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 bg-slate-50/50 text-sm font-semibold cursor-pointer select-none truncate hover:bg-white transition-all flex justify-between items-center group"
+                                >
+                                    <span className="text-slate-700">{FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'เลือกหมวดเงิน'}</span>
+                                    <span className="material-symbols-outlined text-slate-300 group-hover:text-slate-400 transition-colors">expand_more</span>
                                 </div>
-                            )}
-                            <div className="mt-6 flex gap-2 justify-center">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowBorrowMode(false)}
-                                    className="px-6 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700"
-                                >ปิด</button>
-                                <button
-                                    type="button"
-                                    onClick={handleDownloadBorrowPDF}
-                                    className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-                                >ดาวน์โหลด PDF</button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Shared fields */}
-                    {/* Shared fields */}
-                    <div className="space-y-4 mb-4">
-                        {/* ส่วนหลัก: โครงการ / หมวด / บัญชี */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
-                            {/* 1. โครงการ / กิจกรรม (ใช้ Description รายการแรกเป็นหลักในโหมดเดี่ยว) */}
-                            <div className={isGroupMode ? 'col-span-1 md:col-span-3' : 'col-span-1'}>
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">1. โครงการ / กิจกรรม</label>
-                                <input
-                                    type="text"
-                                    value={subItems[0]?.description || ''}
-                                    onChange={e => updateSub(subItems[0].id, 'description', e.target.value)}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
-                                    placeholder="เช่น กิจกรรมพัฒนาผู้เรียน..."
-                                />
-                            </div>
-
-                            {/* 2. หมวดเงิน (Category) */}
-                            <div className={isGroupMode ? 'col-span-1' : 'col-span-1'}>
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">2. หมวดเงิน</label>
-                                {(!isGroupMode && !isEditingFund) ? (
-                                    <div
-                                        onDoubleClick={() => setIsEditingFund(true)}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold cursor-pointer select-none truncate"
-                                        title="ดับเบิลคลิกเพื่อแก้ไข"
-                                    >
-                                        {FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'เลือกหมวดเงิน'}
-                                    </div>
-                                ) : !isGroupMode ? (
-                                    <div className="relative">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsFundDropdownOpen(!isFundDropdownOpen)}
-                                            className="w-full px-4 py-2.5 rounded-xl border border-blue-400 bg-white text-sm font-semibold outline-none ring-2 ring-blue-100 transition-all flex justify-between items-center"
-                                        >
-                                            <span className="truncate">
-                                                {FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'เลือกหมวดเงิน'}
-                                            </span>
-                                            <span className="material-symbols-outlined text-gray-400 text-sm">expand_more</span>
-                                        </button>
-
-                                        {isFundDropdownOpen && (
-                                            <>
-                                                <div className="fixed inset-0 z-40" onClick={() => setIsFundDropdownOpen(false)}></div>
-                                                <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-64 flex flex-col overflow-hidden">
-                                                    <div className="p-2 border-b border-gray-100 shrink-0">
-                                                        <input
-                                                            type="text" autoFocus placeholder="ค้นหาหมวด..."
-                                                            value={addFundSearch}
-                                                            onChange={e => setAddFundSearch(e.target.value)}
-                                                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
-                                                        />
-                                                    </div>
-                                                    <div className="overflow-y-auto py-1">
-                                                        {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => {
-                                                            const filteredOpts = FUND_TYPE_OPTIONS.filter(opt => opt.group === group && opt.label.toLowerCase().includes(addFundSearch.toLowerCase()));
-                                                            if (filteredOpts.length === 0) return null;
-                                                            return (
-                                                                <div key={group}>
-                                                                    <div className="px-3 py-1 text-[10px] font-bold text-gray-400 bg-gray-50 uppercase">
-                                                                        {group}
-                                                                    </div>
-                                                                    {filteredOpts.map(opt => (
-                                                                        <button
-                                                                            key={opt.value}
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setAddFundType(opt.value);
-                                                                                setIsFundDropdownOpen(false);
-                                                                                setIsEditingFund(false);
-                                                                                setAddFundSearch('');
-                                                                                // Auto-select bank logic
-                                                                                const autoBank = schoolSettings.bankAccounts?.find(b => b.fundTypes.includes(opt.value));
-                                                                                if (autoBank) setAddBankId(autoBank.id);
-                                                                            }}
-                                                                            className={`w-full text-left px-4 py-2 text-xs hover:bg-blue-50 ${addFundType === opt.value ? 'bg-blue-50 text-blue-600 font-bold' : 'text-gray-700'}`}
-                                                                        >
-                                                                            {opt.label}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="h-full flex items-center px-4 bg-gray-100 rounded-xl text-xs text-gray-400 italic">เลือกหมวดในแต่ละบรรทัด</div>
-                                )}
-                            </div>
-
-                            {/* 3. บัญชีธนาคาร (Bank Account) */}
-                            <div className="col-span-1">
-                                {!isGroupMode && !isEditingBank ? (
-                                    <div
-                                        onDoubleClick={() => setIsEditingBank(true)}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold cursor-pointer select-none truncate"
-                                        title="ดับเบิลคลิกเพื่อแก้ไข"
-                                    >
-                                        {schoolSettings.bankAccounts?.find(b => b.id === addBankId)?.name || 'เลือกบัญชีธนาคาร'}
-                                    </div>
-                                ) : !isGroupMode ? (
-                                    <div className="flex gap-1">
-                                        <select
-                                            autoFocus
-                                            value={addBankId}
-                                            onChange={e => {
-                                                setAddBankId(e.target.value);
-                                                setIsEditingBank(false);
-                                            }}
-                                            onBlur={() => setIsEditingBank(false)}
-                                            className="flex-1 px-3 py-2.5 rounded-xl border border-blue-400 bg-white text-sm font-semibold outline-none ring-2 ring-blue-100 transition-all appearance-none"
-                                        >
-                                            <option value="">-- เลือกบัญชี --</option>
-                                            {schoolSettings.bankAccounts?.map(acc => (
-                                                <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                ) : (
-                                    <div className="h-full flex items-center px-4 bg-gray-100 rounded-xl text-xs text-gray-400 italic">เลือกบัญชีในแต่ละบรรทัด</div>
-                                )}
-                                {addBankId && !isGroupMode && (
+                            ) : (
+                                <div className="relative">
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            setSelectedBankDetailId(addBankId);
-                                            setIsBankDetailOpen(true);
-                                        }}
-                                        className="mt-1 w-full flex items-center justify-center gap-1 text-[10px] text-blue-500 font-bold hover:underline"
+                                        onClick={() => setIsFundDropdownOpen(!isFundDropdownOpen)}
+                                        className="w-full px-4 py-3 rounded-2xl border-2 border-blue-400 bg-white text-sm font-bold outline-none ring-4 ring-blue-50 transition-all flex justify-between items-center text-left"
                                     >
-                                        <span className="material-symbols-outlined text-xs">manage_accounts</span>
-                                        รายละเอียดบัญชี
+                                        <span className="truncate">{FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'เลือกหมวดเงิน'}</span>
+                                        <span className="material-symbols-outlined text-blue-500">expand_more</span>
                                     </button>
-                                )}
-                            </div>
+                                    {isFundDropdownOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-[60]" onClick={() => setIsFundDropdownOpen(false)}></div>
+                                            <div className="absolute top-full left-0 mt-2 w-full bg-white border border-slate-100 rounded-2xl shadow-2xl z-[70] max-h-72 flex flex-col overflow-hidden animate-slide-up">
+                                                <div className="p-3 border-b border-slate-50 bg-slate-50/50">
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-sm">search</span>
+                                                        <input
+                                                            type="text" autoFocus placeholder="ค้นหาหมวดเงิน..."
+                                                            value={addFundSearch}
+                                                            onChange={e => setAddFundSearch(e.target.value)}
+                                                            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400 focus:shadow-sm"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="overflow-y-auto py-2">
+                                                    {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => {
+                                                        const filteredOpts = FUND_TYPE_OPTIONS.filter(opt => opt.group === group && opt.label.toLowerCase().includes(addFundSearch.toLowerCase()));
+                                                        if (filteredOpts.length === 0) return null;
+                                                        return (
+                                                            <div key={group}>
+                                                                <div className="px-4 py-1.5 text-[10px] font-black text-slate-400 bg-slate-50/30 uppercase tracking-widest leading-none mt-2 first:mt-0">
+                                                                    {group}
+                                                                </div>
+                                                                {filteredOpts.map(opt => (
+                                                                    <button
+                                                                        key={opt.value}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setAddFundType(opt.value);
+                                                                            setIsFundDropdownOpen(false);
+                                                                            setIsEditingFund(false);
+                                                                            setAddFundSearch('');
+                                                                            const autoBank = schoolSettings.bankAccounts?.find(b => b.fundTypes.includes(opt.value));
+                                                                            if (autoBank) setAddBankId(autoBank.id);
+                                                                        }}
+                                                                        className={`w-full text-left px-5 py-2.5 text-xs font-semibold transition-colors flex items-center justify-between ${addFundType === opt.value ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                                                                    >
+                                                                        {opt.label}
+                                                                        {addFundType === opt.value && <span className="material-symbols-outlined text-sm">check_circle</span>}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 mt-4">
-                            <div>
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">วัน/เดือน/ปี</label>
-                                <ThaiDatePicker value={addDate} onChange={(val: string) => setAddDate(val)} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">ที่เอกสาร</label>
-                                <input type="text" value={addDocNo}
-                                    onChange={e => setAddDocNo(e.target.value)}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold outline-none focus:border-blue-400 transition-colors"
-                                    placeholder="เช่น กค 68/001" />
-                            </div>
+                        {/* 2. เลือกบัญชีธนาคาร */}
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
+                                <span className="material-symbols-outlined text-sm text-emerald-500">account_balance</span>
+                                2. บัญชีธนาคาร
+                            </label>
+                            {(!isEditingBank && !isGroupMode) ? (
+                                <div
+                                    onDoubleClick={() => setIsEditingBank(true)}
+                                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 bg-slate-50/50 text-sm font-semibold cursor-pointer select-none truncate hover:bg-white transition-all flex justify-between items-center"
+                                >
+                                    <span className="text-slate-700">{schoolSettings.bankAccounts?.find(b => b.id === addBankId)?.name || 'เลือกบัญชีธนาคาร'}</span>
+                                    <span className="material-symbols-outlined text-slate-300">account_balance</span>
+                                </div>
+                            ) : (
+                                <select
+                                    autoFocus
+                                    value={addBankId}
+                                    onChange={e => { setAddBankId(e.target.value); setIsEditingBank(false); }}
+                                    onBlur={() => setIsEditingBank(false)}
+                                    className="w-full px-4 py-3 rounded-2xl border-2 border-blue-400 bg-white text-sm font-bold outline-none ring-4 ring-blue-50 transition-all appearance-none"
+                                >
+                                    <option value="">-- เลือกบัญชี --</option>
+                                    {schoolSettings.bankAccounts?.map(acc => (
+                                        <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Row 2: Project / กิจกรรม */}
+                    <div className="mb-6">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
+                                <span className="material-symbols-outlined text-sm text-blue-500">assignment</span>
+                                3. โครงการ / กิจกรรม
+                            </label>
+                            <input
+                                type="text"
+                                value={addProject}
+                                onChange={e => setAddProject(e.target.value)}
+                                className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 bg-slate-50/50 text-sm font-semibold outline-none focus:border-blue-400 focus:bg-white transition-all placeholder:text-slate-300"
+                                placeholder="เช่น กิจกรรมพัฒนาคุณภาพผู้เรียน"
+                            />
+                        </div>
+                    </div>
+
+
+                    {/* Middle Section: Date / DocNo */}
+                    <div className="grid grid-cols-2 gap-5 mb-8">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
+                                <span className="material-symbols-outlined text-sm text-slate-400">calendar_today</span>
+                                วัน/เดือน/ปี
+                            </label>
+                            <ThaiDatePicker value={addDate} onChange={(val: string) => setAddDate(val)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
+                                <span className="material-symbols-outlined text-sm text-slate-400">description</span>
+                                ที่เอกสาร
+                            </label>
+                            <input
+                                type="text" value={addDocNo}
+                                onChange={e => setAddDocNo(e.target.value)}
+                                className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 bg-slate-50/50 text-sm font-semibold outline-none focus:border-blue-400 focus:bg-white transition-all placeholder:text-slate-300"
+                                placeholder="เช่น กค 68/001"
+                            />
                         </div>
                     </div>
 
@@ -1588,184 +1550,166 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                         </div>
                     )}
 
-                    {/* === โหมดปกติ + โหมดกลุ่ม (ไม่ใช่ภาษี 1%, ปัจจัยยากจน, กสศ., รายได้แผ่นดิน โหมดจ่าย) === */}
-                    {!(addFundType === 'fund-tax' && !isGroupMode) && !(addFundType === 'fund-poor' && addTransactionType === 'expense' && !isGroupMode) && !(addFundType === 'fund-eef' && addTransactionType === 'expense' && !isGroupMode) && !(addFundType?.startsWith('fund-state') && addTransactionType === 'expense' && !isGroupMode) && (
-                        <>
-                            {/* Separator with count */}
-                            <div className="flex items-center justify-between py-3 border-t border-gray-200 mt-2">
-                                <span className="text-sm text-gray-400">
-                                    {subItems.length} รายการ
-                                    {!isGroupMode && <span className="text-gray-300 ml-1">• ไม่ใส่เงิน = หัวรายการ</span>}
-                                    {isGroupMode && <span className="text-purple-400 ml-1">• โหมดกลุ่ม (เลือกหมวดเงินแต่ละรายการ)</span>}
-                                </span>
-                                <button type="button" onClick={addSubItem}
-                                    className="text-sm text-blue-500 font-semibold hover:text-blue-700 transition-colors">+ เพิ่มรายการ</button>
-                            </div>
+                    {/* Sub-items Section */}
+                    <div className="flex items-center justify-between py-4 border-t-2 border-slate-50 mt-4">
+                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full">
+                            {subItems.length} รายการ
+                            {!isGroupMode && <span className="ml-2 opacity-60">• ไม่ใส่เงิน = หัวรายการ</span>}
+                        </span>
+                        <button type="button" onClick={addSubItem}
+                            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-all">
+                            <span className="material-symbols-outlined text-sm font-black">add_circle</span>
+                            เพิ่มรายการ
+                        </button>
+                    </div>
 
-                            {/* Sub-items list */}
-                            <div className="space-y-2 pb-2">
-                                {subItems.map((s, idx) => {
-                                    const hasAmount = s.amount && parseFloat(s.amount) > 0;
-                                    const isHeader = !isGroupMode && !hasAmount && s.description;
-                                    return (
-                                        <div key={s.id} className={`rounded-xl border transition-all ${isHeader
-                                            ? 'bg-slate-50 border-slate-200'
-                                            : 'bg-white border-gray-200 hover:border-blue-300'
-                                            }`}>
-                                            <div className="flex items-center gap-3 px-3 py-2.5">
-                                                {subItems.length > 1 ? (
-                                                    <button type="button" onClick={() => removeSubItem(s.id)}
-                                                        className="w-6 h-6 rounded-full border-2 border-gray-200 flex items-center justify-center shrink-0 hover:border-red-400 hover:bg-red-50 transition-all group">
-                                                        <span className="material-symbols-outlined text-[12px] text-gray-300 group-hover:text-red-400">close</span>
-                                                    </button>
-                                                ) : (
-                                                    <div className="w-6 h-6 rounded-full border-2 border-blue-500 bg-blue-500 flex items-center justify-center shrink-0">
-                                                        <span className="material-symbols-outlined text-[12px] text-white">check</span>
-                                                    </div>
-                                                )}
-                                                <div className="flex-1 min-w-0">
-                                                    <input type="text" value={s.description}
-                                                        onChange={e => updateSub(s.id, 'description', e.target.value)}
-                                                        className={`w-full py-1 text-sm outline-none placeholder:text-gray-300 bg-transparent ${isHeader ? 'font-semibold text-gray-600' : 'font-medium text-gray-900'
-                                                            }`}
-                                                        placeholder={isGroupMode ? `รายการที่ ${idx + 1}` : (!s.amount ? 'ชื่อหัว/รายการ' : `รายการที่ ${idx + 1}`)} />
-                                                </div>
-                                                <div className={`flex items-center rounded-lg px-2.5 py-1 border ${hasAmount
-                                                    ? addTransactionType === 'income'
-                                                        ? 'bg-green-50 border-green-200'
-                                                        : 'bg-red-50 border-red-200'
-                                                    : 'bg-gray-50 border-gray-200'
-                                                    }`}>
-                                                    <input type="number" step="0.01" value={s.amount}
-                                                        onChange={e => updateSub(s.id, 'amount', e.target.value)}
-                                                        className={`w-28 py-0.5 text-sm font-bold text-right outline-none bg-transparent ${hasAmount
-                                                            ? addTransactionType === 'income' ? 'text-green-700' : 'text-red-700'
-                                                            : 'text-gray-400'
-                                                            }`}
-                                                        placeholder="จำนวนเงิน" />
-                                                </div>
+                    <div className="space-y-3 pb-6">
+                        {subItems.map((s, idx) => {
+                            const hasAmount = s.amount && parseFloat(s.amount) > 0;
+                            const isHeader = !isGroupMode && !hasAmount && s.description;
+                            return (
+                                <div key={s.id} className={`group rounded-2xl border-2 transition-all duration-200 ${isHeader
+                                    ? 'bg-slate-50 border-slate-100 shadow-sm'
+                                    : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-md'
+                                    }`}>
+                                    <div className="flex items-center gap-4 px-4 py-3">
+                                        {subItems.length > 1 ? (
+                                            <button type="button" onClick={() => removeSubItem(s.id)}
+                                                className="w-8 h-8 rounded-full bg-red-50 text-red-400 flex items-center justify-center shrink-0 hover:bg-red-500 hover:text-white transition-all scale-90 opacity-0 group-hover:opacity-100">
+                                                <span className="material-symbols-outlined text-base">delete</span>
+                                            </button>
+                                        ) : (
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${addTransactionType === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
+                                                <span className="material-symbols-outlined text-base font-black">check_circle</span>
                                             </div>
-                                            {/* โหมดกลุ่ม: dropdown เลือกหมวดเงินและบัญชีธนาคารแต่ละรายการ */}
-                                            {isGroupMode && (
-                                                <div className="px-3 pb-2.5 pt-0 space-y-2">
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <select
-                                                            value={s.fundType || 'fund-subsidy'}
-                                                            onChange={e => updateSub(s.id, 'fundType', e.target.value)}
-                                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[10px] outline-none focus:border-purple-400 bg-gray-50 transition-colors"
-                                                        >
-                                                            {FUND_TYPE_OPTIONS.map(opt => (
-                                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                            ))}
-                                                        </select>
-                                                        <select
-                                                            value={s.bankId || ''}
-                                                            onChange={e => updateSub(s.id, 'bankId', e.target.value)}
-                                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[10px] outline-none focus:border-purple-400 bg-gray-50 transition-colors"
-                                                        >
-                                                            <option value="">-- บัญชีธนาคาร --</option>
-                                                            {schoolSettings.bankAccounts?.sort((a, b) => a.id === 'ba-other' ? 1 : b.id === 'ba-other' ? -1 : 0).map(acc => (
-                                                                <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Payee type selector - expense only (ไม่แสดงในโหมดกลุ่ม) */}
-                            {addTransactionType === 'expense' && !isGroupMode && (
-                                <div className="mt-4">
-                                    <label className="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                                        ประเภทผู้รับเงิน
-                                        {!addPayeeType && (
-                                            <span className="text-red-400 text-[10px] bg-red-50 border border-red-200 rounded-full px-2 py-0.5 ml-1">กรุณาเลือก</span>
                                         )}
-                                    </label>
-                                    <div className="flex gap-2">
-                                        <button type="button" onClick={() => setAddPayeeType('legal')}
-                                            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-2 ${addPayeeType === 'legal'
-                                                ? 'bg-blue-500 border-blue-500 text-white shadow-sm shadow-blue-200'
-                                                : addPayeeType === null
-                                                    ? 'bg-white border-dashed border-gray-300 text-gray-400 hover:border-blue-300 hover:text-blue-500'
-                                                    : 'bg-gray-50 border-gray-200 text-gray-400'
-                                                }`}>
-                                            <span className="material-symbols-outlined text-base align-middle mr-1">business</span>
-                                            นิติบุคคล
-                                        </button>
-                                        <button type="button" onClick={() => setAddPayeeType('person')}
-                                            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border-2 ${addPayeeType === 'person'
-                                                ? 'bg-blue-500 border-blue-500 text-white shadow-sm shadow-blue-200'
-                                                : addPayeeType === null
-                                                    ? 'bg-white border-dashed border-gray-300 text-gray-400 hover:border-blue-300 hover:text-blue-500'
-                                                    : 'bg-gray-50 border-gray-200 text-gray-400'
-                                                }`}>
-                                            <span className="material-symbols-outlined text-base align-middle mr-1">person</span>
-                                            บุคคลธรรมดา
-                                        </button>
+                                        <div className="flex-1 min-w-0">
+                                            <input type="text" value={s.description}
+                                                onChange={e => updateSub(s.id, 'description', e.target.value)}
+                                                className={`w-full py-1 text-sm outline-none placeholder:text-slate-300 bg-transparent ${isHeader ? 'font-black text-slate-800' : 'font-bold text-slate-700'
+                                                    }`}
+                                                placeholder={isGroupMode ? `ชื่อรายการที่ ${idx + 1}` : (!s.amount ? 'เช่น บันทึกการรับเงินเพื่อเก็บรักษา...' : `ชื่อรายการที่ ${idx + 1}`)} />
+                                        </div>
+                                        <div className={`flex items-center rounded-xl px-3 py-1.5 border-2 transition-all ${hasAmount
+                                            ? addTransactionType === 'income'
+                                                ? 'bg-emerald-50 border-emerald-100'
+                                                : 'bg-rose-50 border-rose-100'
+                                            : 'bg-slate-50 border-slate-50'
+                                            }`}>
+                                            <input type="number" step="0.01" value={s.amount}
+                                                onChange={e => updateSub(s.id, 'amount', e.target.value)}
+                                                className={`w-24 py-0.5 text-sm font-black text-right outline-none bg-transparent ${hasAmount
+                                                    ? addTransactionType === 'income' ? 'text-emerald-700' : 'text-rose-700'
+                                                    : 'text-slate-400'
+                                                    }`}
+                                                placeholder="0.00" />
+                                        </div>
                                     </div>
+                                    {isGroupMode && (
+                                        <div className="px-4 pb-3 pt-0 grid grid-cols-2 gap-3">
+                                            <select
+                                                value={s.fundType || 'fund-subsidy'}
+                                                onChange={e => updateSub(s.id, 'fundType', e.target.value)}
+                                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-50 text-[11px] font-bold outline-none focus:border-blue-200 bg-slate-50/50 transition-all text-slate-600"
+                                            >
+                                                {FUND_TYPE_OPTIONS.map(opt => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                            <select
+                                                value={s.bankId || ''}
+                                                onChange={e => updateSub(s.id, 'bankId', e.target.value)}
+                                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-50 text-[11px] font-bold outline-none focus:border-blue-200 bg-slate-50/50 transition-all text-slate-600"
+                                            >
+                                                <option value="">-- บัญชีธนาคาร --</option>
+                                                {schoolSettings.bankAccounts?.sort((a, b) => a.id === 'ba-other' ? 1 : b.id === 'ba-other' ? -1 : 0).map(acc => (
+                                                    <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </>
-                    )}
+                            );
+                        })}
+                    </div>
 
+                    {/* Payee Type Section */}
+                    {addTransactionType === 'expense' && !isGroupMode && (
+                        <div className="mt-8 mb-6 pt-6 border-t-2 border-slate-50">
+                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block mb-4 ml-1">
+                                ประเภทผู้รับเงิน (กรุณาเลือก)
+                                {!addPayeeType && (
+                                    <span className="text-rose-500 font-bold ml-2 italic animate-pulse">! ต้องระบุ</span>
+                                )}
+                            </label>
+                            <div className="flex gap-4">
+                                <button type="button" onClick={() => setAddPayeeType('legal')}
+                                    className={`flex-1 flex flex-col items-center justify-center py-5 rounded-[2rem] border-2 transition-all duration-300 ${addPayeeType === 'legal'
+                                        ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-200 -translate-y-1'
+                                        : 'bg-white border-slate-100 text-slate-400 hover:border-blue-200 hover:text-blue-500 hover:bg-slate-50/50'
+                                        }`}>
+                                    <span className="material-symbols-outlined text-3xl mb-1">corporate_fare</span>
+                                    <span className="text-sm font-black">นิติบุคคล</span>
+                                </button>
+                                <button type="button" onClick={() => setAddPayeeType('person')}
+                                    className={`flex-1 flex flex-col items-center justify-center py-5 rounded-[2rem] border-2 transition-all duration-300 ${addPayeeType === 'person'
+                                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-xl shadow-emerald-200 -translate-y-1'
+                                        : 'bg-white border-slate-100 text-slate-400 hover:border-emerald-200 hover:text-emerald-500 hover:bg-slate-50/50'
+                                        }`}>
+                                    <span className="material-symbols-outlined text-3xl mb-1">person</span>
+                                    <span className="text-sm font-black">บุคคลธรรมดา</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Bank Detail Modal */}
-                <BankDetailModal
-                    isOpen={isBankDetailOpen}
-                    onClose={() => setIsBankDetailOpen(false)}
-                    bankId={selectedBankDetailId}
-                    schoolSettings={schoolSettings}
-                    transactions={transactions}
-                />
-
-                <ConfirmModal
-                    isOpen={modalConfig.isOpen}
-                    onConfirm={() => {
-                        if (modalConfig.onConfirm) modalConfig.onConfirm();
-                        setModalConfig({ ...modalConfig, isOpen: false });
-                    }}
-                    onCancel={() => setModalConfig({ ...modalConfig, isOpen: false })}
-                    title={modalConfig.title}
-                    message={modalConfig.message}
-                    type={modalConfig.type}
-                    showCancel={!!modalConfig.onConfirm}
-                />
-
-                {/* Footer buttons (Premium Design) */}
-                <div className="p-6 border-t border-gray-100 shrink-0 bg-gray-50/50 flex justify-between items-center px-8">
+                {/* Footer Section (Sticky) */}
+                <div className="p-8 border-t border-slate-100 shrink-0 bg-slate-50/80 backdrop-blur-md flex justify-between items-center">
                     <div className="text-left">
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">ยอดรวมสุทธิ</p>
-                        <p className={`text-2xl font-black ${addTransactionType === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                            {addTransactionType === 'income' ? '+' : '-'} ฿{fmtMoney(subTotal || parseFloat(taxAmount) || parseFloat(taxManualAmount) || parseFloat(customExpenseAmount) || parseFloat(stateManualAmount) || 0)}
-                        </p>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">ยอดรวมสุทธิ</p>
+                        <div className="flex items-baseline gap-1">
+                            <span className={`text-3xl font-black tracking-tighter ${addTransactionType === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {addTransactionType === 'income' ? '+' : '-'} {fmtMoney(subTotal || parseFloat(taxAmount) || parseFloat(taxManualAmount) || parseFloat(customExpenseAmount) || parseFloat(stateManualAmount) || 0)}
+                            </span>
+                            <span className="text-sm font-black text-slate-400">บาท</span>
+                        </div>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-4">
                         <button type="button" onClick={onClose}
-                            className="px-8 py-3 rounded-2xl bg-white border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-all active:scale-95">ยกเลิก</button>
+                            className="px-8 py-4 rounded-2xl bg-white border-2 border-slate-100 text-slate-500 font-black text-sm hover:bg-slate-50 hover:border-slate-200 transition-all active:scale-95">
+                            ยกเลิก
+                        </button>
                         <button type="submit"
-                            className={`px-10 py-3 rounded-2xl font-bold text-white shadow-lg transition-all active:scale-95 shadow-2xl ${addTransactionType === 'income' ? 'bg-green-600 hover:bg-green-700 shadow-green-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}>
+                            className={`px-12 py-4 rounded-2xl font-black text-white text-sm shadow-2xl transition-all active:scale-95 group flex items-center gap-2 ${addTransactionType === 'income' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'}`}>
+                            <span className="material-symbols-outlined text-base font-black">save</span>
                             {showBorrowMode ? 'สร้างสัญญายืม' : 'บันทึกรายการ'}
                         </button>
                     </div>
                 </div>
             </form>
-            {/* Bank Detail Sub-modal */}
-            {isBankDetailOpen && selectedBankDetailId && (
-                <BankDetailModal
-                    isOpen={isBankDetailOpen}
-                    onClose={() => setIsBankDetailOpen(false)}
-                    bankId={selectedBankDetailId}
-                    schoolSettings={schoolSettings}
-                    transactions={transactions}
-                />
-            )}
 
-            {/* Delete Confirmation Modal */}
+            <BankDetailModal
+                isOpen={isBankDetailOpen}
+                onClose={() => setIsBankDetailOpen(false)}
+                bankId={selectedBankDetailId || ''}
+                schoolSettings={schoolSettings}
+                transactions={transactions}
+            />
+
+            <ConfirmModal
+                isOpen={modalConfig.isOpen}
+                onConfirm={() => {
+                    if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    setModalConfig({ ...modalConfig, isOpen: false });
+                }}
+                onCancel={() => setModalConfig({ ...modalConfig, isOpen: false })}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                showCancel={!!modalConfig.onConfirm}
+            />
+
             <DeleteConfirmModal
                 isOpen={deleteModalConfig.isOpen}
                 title={deleteModalConfig.title}
@@ -1779,4 +1723,5 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
         </div>
     );
 };
+
 export default CashBookAddModal;

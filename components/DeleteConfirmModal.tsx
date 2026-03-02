@@ -57,15 +57,11 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, title, 
                         ยกเลิก
                     </button>
                     <button
-                        disabled={!reason.trim()}
                         onClick={() => {
-                            onConfirm(reason);
+                            onConfirm(reason || "ไม่ได้ระบุเหตุผล");
                             setReason('');
                         }}
-                        className={`px-8 py-2.5 rounded-xl font-semibold text-white shadow-lg transition-all ${reason.trim()
-                                ? 'bg-red-600 hover:bg-red-700 active:scale-95 shadow-red-200'
-                                : 'bg-red-300 cursor-not-allowed'
-                            }`}
+                        className="px-8 py-2.5 rounded-xl font-semibold text-white shadow-lg transition-all bg-red-600 hover:bg-red-700 active:scale-95 shadow-red-200"
                     >
                         ยืนยันการลบ
                     </button>
