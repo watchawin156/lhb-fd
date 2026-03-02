@@ -391,7 +391,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await doAddTransaction({
               id: baseId,
               date: tx.date,
-              docNo: tx.docNo ? tx.docNo + ' (ยืม)' : '',
+              docNo: tx.docNo ? tx.docNo + ' (ยืมจาก)' : '',
               description: `ยืมจาก ${getFundTitle(donor)}`,
               fundType: tx.fundType,
               income: shortfall,
@@ -404,7 +404,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await doAddTransaction({
               id: baseId + 1,
               date: tx.date,
-              docNo: tx.docNo ? tx.docNo + ' (ยืม)' : '',
+              docNo: tx.docNo ? tx.docNo + ' (ยืมให้)' : '',
               description: `ยืมให้ ${getFundTitle(tx.fundType)}`,
               fundType: donor,
               income: 0,
@@ -472,21 +472,12 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           };
           setLoans(prev => [loan, ...prev]);
           logAction('สร้างสัญญายืม', `ระบบยืมอัตโนมัติ ${shortfall} จาก ${getFundTitle(donor)} เพื่อจ่าย${getFundTitle(merged.fundType)}`, 'loan');
+          const baseId = Date.now();
+          // 1. ยืมจาก (Income to Target)
           await doAddTransaction({
-            id: Date.now() + 1,
+            id: baseId,
             date: merged.date,
-            docNo: merged.docNo ? merged.docNo + ' (ยืม)' : '',
-            description: `ยืมให้ ${getFundTitle(merged.fundType)}`,
-            fundType: donor,
-            income: 0,
-            expense: shortfall,
-            loanId: loan.id,
-            skipLoanCheck: true,
-          });
-          await doAddTransaction({
-            id: Date.now() + 2,
-            date: merged.date,
-            docNo: merged.docNo ? merged.docNo + ' (ยืม)' : '',
+            docNo: merged.docNo ? merged.docNo + ' (ยืมจาก)' : '',
             description: `ยืมจาก ${getFundTitle(donor)}`,
             fundType: merged.fundType,
             income: shortfall,
@@ -494,6 +485,22 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             loanId: loan.id,
             skipLoanCheck: true,
           });
+
+          // 2. ยืมให้ (Expense from Source)
+          await doAddTransaction({
+            id: baseId + 1,
+            date: merged.date,
+            docNo: merged.docNo ? merged.docNo + ' (ยืมให้)' : '',
+            description: `ยืมให้ ${getFundTitle(merged.fundType)}`,
+            fundType: donor,
+            income: 0,
+            expense: shortfall,
+            loanId: loan.id,
+            skipLoanCheck: true,
+          });
+
+          // Update original modified transaction to be third
+          merged.id = baseId + 2;
         } else {
           alert(`ไม่พบหมวดเงินอื่นที่สามารถยืมมาได้ จึงจะบันทึกยอดติดลบใน ${getFundTitle(merged.fundType)}`);
         }

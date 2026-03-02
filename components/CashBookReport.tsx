@@ -791,8 +791,8 @@ const CashBookReport: React.FC<CashBookReportProps> = ({ selectedFiscalYear }) =
                                                     }
                                                 };
 
-                                                const showBorrowDoc = !isReturnPhase && ((tx.income || 0) > 0);
-                                                const showReturnDoc = !!isReturnPhase && ((tx.expense || 0) > 0);
+                                                const showBorrowDoc = !isReturnPhase && !!tx.loanId;
+                                                const showReturnDoc = !!isReturnPhase && !!tx.loanId;
 
                                                 if (showBorrowDoc || showReturnDoc) {
                                                     return (

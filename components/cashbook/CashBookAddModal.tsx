@@ -332,7 +332,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             await addTransaction({
                 id: baseId,
                 date: today,
-                docNo: loanId, // ใช้เลขเดียวกัน
+                docNo: `${loanId} (ยืมจาก)`, // เพิ่ม (ยืมจาก)
                 description: `ยืมจาก ${FUND_TYPE_OPTIONS.find(f => f.value === borrowFromFund)?.label || borrowFromFund} เพื่อ ${borrowPurpose}`,
                 fundType: borrowFromFund, // ในระบบปัจจุบันอาจจะยังเป็นกองทุนเดิมแต่เป็นรายรับ
                 income: borrowAmountNum,
@@ -346,7 +346,7 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
             await addTransaction({
                 id: baseId + 1,
                 date: today,
-                docNo: loanId, // ใช้เลขเดียวกัน
+                docNo: `${loanId} (ยืมให้)`, // เพิ่ม (ยืมให้)
                 description: `ยืมให้เพื่อ ${borrowPurpose}`,
                 fundType: borrowFromFund,
                 income: 0,
