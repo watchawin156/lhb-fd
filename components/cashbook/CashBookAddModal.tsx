@@ -850,189 +850,170 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-[2px] animate-fade-in p-4">
             <form onSubmit={handleAddSubmit}
-                className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[96vh] min-h-[85vh] flex flex-col overflow-hidden animate-scale-in mx-4 border border-white/20">
+                className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden animate-scale-in border border-slate-200">
 
                 {/* Header */}
-                <div className="px-8 pt-6 pb-4 shrink-0 flex justify-between items-center">
-                    <div>
-                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest opacity-70">สมุดเงินสด</p>
-                        <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-                            {showBorrowMode ? 'ขอยืมเงิน' : 'เพิ่มรายการ'}
-                        </h2>
+                <div className="px-6 py-4 shrink-0 flex justify-between items-center border-b border-slate-50">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${addTransactionType === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
+                            <span className="material-symbols-outlined text-2xl font-black">
+                                {showBorrowMode ? 'currency_exchange' : addTransactionType === 'income' ? 'add_circle' : 'do_not_disturb_on'}
+                            </span>
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-black text-slate-800 tracking-tight leading-none mb-1">
+                                {showBorrowMode ? 'ขอยืมเงิน' : 'เพิ่มรายการใหม่'}
+                            </h2>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">CASHBOOK ENTRY</p>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                         {!showBorrowMode && (
-                            <div className="flex items-center bg-gray-100 p-1 rounded-full border border-gray-200">
+                            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
                                 <button
                                     type="button"
                                     onClick={() => setIsGroupMode(false)}
-                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!isGroupMode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    className={`px-4 py-1.5 rounded-lg text-[11px] font-black transition-all ${!isGroupMode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
                                 >เดี่ยว</button>
                                 <button
                                     type="button"
                                     onClick={() => setIsGroupMode(true)}
-                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${isGroupMode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    className={`px-4 py-1.5 rounded-lg text-[11px] font-black transition-all ${isGroupMode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
                                 >กลุ่ม</button>
                             </div>
                         )}
-                        <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all border border-slate-200">
-                            <span className="material-symbols-outlined text-xl">close</span>
+                        <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100">
+                            <span className="material-symbols-outlined text-lg">close</span>
                         </button>
                     </div>
                 </div>
 
                 {/* Scrollable content */}
-                <div className="flex-1 overflow-y-auto px-8 py-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar bg-slate-50/30">
                     {/* Top Section: Fund / Bank (Row 1) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         {/* 1. หมวดเงิน */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
-                                <span className="material-symbols-outlined text-sm text-indigo-500">account_balance_wallet</span>
-                                1. หมวดเงิน
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                1. หมวดเงิน / เลือกประเภทเงิน
                             </label>
-                            {(!isEditingFund && !isGroupMode) ? (
-                                <div
-                                    onDoubleClick={() => setIsEditingFund(true)}
-                                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 bg-slate-50/50 text-sm font-semibold cursor-pointer select-none truncate hover:bg-white transition-all flex justify-between items-center group"
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsFundDropdownOpen(!isFundDropdownOpen)}
+                                    className={`w-full px-4 py-2.5 rounded-xl border-2 bg-white text-sm font-bold transition-all flex justify-between items-center text-left ${isFundDropdownOpen ? 'border-blue-500 shadow-lg shadow-blue-50' : 'border-slate-100 hover:border-slate-300'}`}
                                 >
-                                    <span className="text-slate-700">{FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'เลือกหมวดเงิน'}</span>
-                                    <span className="material-symbols-outlined text-slate-300 group-hover:text-slate-400 transition-colors">expand_more</span>
-                                </div>
-                            ) : (
-                                <div className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsFundDropdownOpen(!isFundDropdownOpen)}
-                                        className="w-full px-4 py-3 rounded-2xl border-2 border-blue-400 bg-white text-sm font-bold outline-none ring-4 ring-blue-50 transition-all flex justify-between items-center text-left"
-                                    >
-                                        <span className="truncate">{FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'เลือกหมวดเงิน'}</span>
-                                        <span className="material-symbols-outlined text-blue-500">expand_more</span>
-                                    </button>
-                                    {isFundDropdownOpen && (
-                                        <>
-                                            <div className="fixed inset-0 z-[60]" onClick={() => setIsFundDropdownOpen(false)}></div>
-                                            <div className="absolute top-full left-0 mt-2 w-full bg-white border border-slate-100 rounded-2xl shadow-2xl z-[70] max-h-72 flex flex-col overflow-hidden animate-slide-up">
-                                                <div className="p-3 border-b border-slate-50 bg-slate-50/50">
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-sm">search</span>
-                                                        <input
-                                                            type="text" autoFocus placeholder="ค้นหาหมวดเงิน..."
-                                                            value={addFundSearch}
-                                                            onChange={e => setAddFundSearch(e.target.value)}
-                                                            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400 focus:shadow-sm"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="overflow-y-auto py-2">
-                                                    {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => {
-                                                        const filteredOpts = FUND_TYPE_OPTIONS.filter(opt => opt.group === group && opt.label.toLowerCase().includes(addFundSearch.toLowerCase()));
-                                                        if (filteredOpts.length === 0) return null;
-                                                        return (
-                                                            <div key={group}>
-                                                                <div className="px-4 py-1.5 text-[10px] font-black text-slate-400 bg-slate-50/30 uppercase tracking-widest leading-none mt-2 first:mt-0">
-                                                                    {group}
-                                                                </div>
-                                                                {filteredOpts.map(opt => (
-                                                                    <button
-                                                                        key={opt.value}
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            setAddFundType(opt.value);
-                                                                            setIsFundDropdownOpen(false);
-                                                                            setIsEditingFund(false);
-                                                                            setAddFundSearch('');
-                                                                            const autoBank = schoolSettings.bankAccounts?.find(b => b.fundTypes.includes(opt.value));
-                                                                            if (autoBank) setAddBankId(autoBank.id);
-                                                                        }}
-                                                                        className={`w-full text-left px-5 py-2.5 text-xs font-semibold transition-colors flex items-center justify-between ${addFundType === opt.value ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
-                                                                    >
-                                                                        {opt.label}
-                                                                        {addFundType === opt.value && <span className="material-symbols-outlined text-sm">check_circle</span>}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        );
-                                                    })}
+                                    <span className="truncate text-slate-700">
+                                        {FUND_TYPE_OPTIONS.find(o => o.value === addFundType)?.label || 'คลิกที่นี่เพื่อเลือกหมวดเงิน'}
+                                    </span>
+                                    <span className={`material-symbols-outlined text-slate-300 transition-transform ${isFundDropdownOpen ? 'rotate-180 text-blue-500' : ''}`}>expand_more</span>
+                                </button>
+                                {isFundDropdownOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-[60]" onClick={() => setIsFundDropdownOpen(false)}></div>
+                                        <div className="absolute top-full left-0 mt-2 w-full bg-white border border-slate-100 rounded-2xl shadow-2xl z-[70] max-h-72 flex flex-col overflow-hidden animate-slide-up">
+                                            <div className="p-3 border-b border-slate-50 bg-slate-50/50">
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-sm">search</span>
+                                                    <input
+                                                        type="text" autoFocus placeholder="ค้นหาหมวดเงิน..."
+                                                        value={addFundSearch}
+                                                        onChange={e => setAddFundSearch(e.target.value)}
+                                                        className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400 focus:shadow-sm"
+                                                    />
                                                 </div>
                                             </div>
-                                        </>
-                                    )}
-                                </div>
-                            )}
+                                            <div className="overflow-y-auto py-2">
+                                                {Array.from(new Set(FUND_TYPE_OPTIONS.map(o => o.group))).map(group => {
+                                                    const filteredOpts = FUND_TYPE_OPTIONS.filter(opt => opt.group === group && opt.label.toLowerCase().includes(addFundSearch.toLowerCase()));
+                                                    if (filteredOpts.length === 0) return null;
+                                                    return (
+                                                        <div key={group}>
+                                                            <div className="px-4 py-1.5 text-[10px] font-black text-slate-400 bg-slate-50/30 uppercase tracking-widest leading-none mt-2 first:mt-0">
+                                                                {group}
+                                                            </div>
+                                                            {filteredOpts.map(opt => (
+                                                                <button
+                                                                    key={opt.value}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setAddFundType(opt.value);
+                                                                        setIsFundDropdownOpen(false);
+                                                                        setIsEditingFund(false);
+                                                                        setAddFundSearch('');
+                                                                        const autoBank = schoolSettings.bankAccounts?.find(b => b.fundTypes.includes(opt.value));
+                                                                        if (autoBank) setAddBankId(autoBank.id);
+                                                                    }}
+                                                                    className={`w-full text-left px-5 py-2.5 text-xs font-semibold transition-colors flex items-center justify-between ${addFundType === opt.value ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                                                                >
+                                                                    {opt.label}
+                                                                    {addFundType === opt.value && <span className="material-symbols-outlined text-sm">check_circle</span>}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         {/* 2. เลือกบัญชีธนาคาร */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
-                                <span className="material-symbols-outlined text-sm text-emerald-500">account_balance</span>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                                 2. บัญชีธนาคาร
                             </label>
-                            {(!isEditingBank && !isGroupMode) ? (
-                                <div
-                                    onDoubleClick={() => setIsEditingBank(true)}
-                                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 bg-slate-50/50 text-sm font-semibold cursor-pointer select-none truncate hover:bg-white transition-all flex justify-between items-center"
-                                >
-                                    <span className="text-slate-700">{schoolSettings.bankAccounts?.find(b => b.id === addBankId)?.name || 'เลือกบัญชีธนาคาร'}</span>
-                                    <span className="material-symbols-outlined text-slate-300">account_balance</span>
-                                </div>
-                            ) : (
-                                <select
-                                    autoFocus
-                                    value={addBankId}
-                                    onChange={e => { setAddBankId(e.target.value); setIsEditingBank(false); }}
-                                    onBlur={() => setIsEditingBank(false)}
-                                    className="w-full px-4 py-3 rounded-2xl border-2 border-blue-400 bg-white text-sm font-bold outline-none ring-4 ring-blue-50 transition-all appearance-none"
-                                >
-                                    <option value="">-- เลือกบัญชี --</option>
-                                    {schoolSettings.bankAccounts?.map(acc => (
-                                        <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
-                                    ))}
-                                </select>
-                            )}
+                            <select
+                                value={addBankId}
+                                onChange={e => setAddBankId(e.target.value)}
+                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-sm font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-emerald-400 focus:shadow-lg focus:shadow-emerald-50 transition-all appearance-none cursor-pointer"
+                            >
+                                <option value="">-- คลิกเลือกบัญชี --</option>
+                                {schoolSettings.bankAccounts?.map(acc => (
+                                    <option key={acc.id} value={acc.id}>{fmtBankShort(acc.name)}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
-                    {/* Row 2: Project / กิจกรรม */}
-                    <div className="mb-6">
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
-                                <span className="material-symbols-outlined text-sm text-blue-500">assignment</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        {/* 3. โครงการ / กิจกรรม */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                                 3. โครงการ / กิจกรรม
                             </label>
                             <input
                                 type="text"
                                 value={addProject}
                                 onChange={e => setAddProject(e.target.value)}
-                                className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 bg-slate-50/50 text-sm font-semibold outline-none focus:border-blue-400 focus:bg-white transition-all placeholder:text-slate-300"
+                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-sm font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-blue-400 transition-all placeholder:text-slate-300"
                                 placeholder="เช่น กิจกรรมพัฒนาคุณภาพผู้เรียน"
                             />
                         </div>
-                    </div>
 
-
-                    {/* Middle Section: Date / DocNo */}
-                    <div className="grid grid-cols-2 gap-5 mb-8">
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
-                                <span className="material-symbols-outlined text-sm text-slate-400">calendar_today</span>
-                                วัน/เดือน/ปี
-                            </label>
-                            <ThaiDatePicker value={addDate} onChange={(val: string) => setAddDate(val)} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ml-1">
-                                <span className="material-symbols-outlined text-sm text-slate-400">description</span>
-                                ที่เอกสาร
-                            </label>
-                            <input
-                                type="text" value={addDocNo}
-                                onChange={e => setAddDocNo(e.target.value)}
-                                className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 bg-slate-50/50 text-sm font-semibold outline-none focus:border-blue-400 focus:bg-white transition-all placeholder:text-slate-300"
-                                placeholder="เช่น กค 68/001"
-                            />
+                        {/* 4. วันที่ และ ที่เอกสาร */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                    4. วันที่
+                                </label>
+                                <ThaiDatePicker value={addDate} onChange={(val: string) => setAddDate(val)} />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                    5. ที่เอกสาร
+                                </label>
+                                <input
+                                    type="text" value={addDocNo}
+                                    onChange={e => setAddDocNo(e.target.value)}
+                                    className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-100 bg-white text-sm font-bold text-slate-700 outline-none hover:border-slate-300 focus:border-blue-400 transition-all placeholder:text-slate-300"
+                                    placeholder="เลขอ้างอิง"
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -1553,54 +1534,53 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                     )}
 
                     {/* Sub-items Section */}
-                    <div className="flex items-center justify-between py-4 border-t-2 border-slate-50 mt-4">
-                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full">
-                            {subItems.length} รายการ
-                            {!isGroupMode && <span className="ml-2 opacity-60">• ไม่ใส่เงิน = หัวรายการ</span>}
-                        </span>
+                    <div className="flex items-center justify-between py-2 border-t border-slate-100 mt-2">
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-blue-500 text-sm">list_alt</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                {subItems.length} รายการ
+                            </span>
+                        </div>
                         <button type="button" onClick={addSubItem}
-                            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-all">
-                            <span className="material-symbols-outlined text-sm font-black">add_circle</span>
+                            className="flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-500 text-white text-[11px] font-black hover:bg-blue-600 transition-all shadow-md shadow-blue-100">
+                            <span className="material-symbols-outlined text-[14px]">add_circle</span>
                             เพิ่มรายการ
                         </button>
                     </div>
 
-                    <div className="space-y-3 pb-6">
+                    <div className="space-y-2 pb-4">
                         {subItems.map((s, idx) => {
                             const hasAmount = s.amount && parseFloat(s.amount) > 0;
                             const isHeader = !isGroupMode && !hasAmount && s.description;
                             return (
-                                <div key={s.id} className={`group rounded-2xl border-2 transition-all duration-200 ${isHeader
-                                    ? 'bg-slate-50 border-slate-100 shadow-sm'
-                                    : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-md'
+                                <div key={s.id} className={`group rounded-xl border transition-all duration-200 ${isHeader
+                                    ? 'bg-slate-100 border-slate-200 shadow-sm'
+                                    : 'bg-white border-slate-100 hover:border-blue-100 hover:shadow-sm'
                                     }`}>
-                                    <div className="flex items-center gap-4 px-4 py-3">
+                                    <div className="flex items-center gap-3 px-3 py-2">
                                         {subItems.length > 1 ? (
                                             <button type="button" onClick={() => removeSubItem(s.id)}
-                                                className="w-8 h-8 rounded-full bg-red-50 text-red-400 flex items-center justify-center shrink-0 hover:bg-red-500 hover:text-white transition-all scale-90 opacity-0 group-hover:opacity-100">
-                                                <span className="material-symbols-outlined text-base">delete</span>
+                                                className="w-7 h-7 rounded-lg bg-red-50 text-red-400 flex items-center justify-center shrink-0 hover:bg-red-500 hover:text-white transition-all scale-90 opacity-0 group-hover:opacity-100 border border-red-100">
+                                                <span className="material-symbols-outlined text-sm">delete</span>
                                             </button>
                                         ) : (
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${addTransactionType === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
-                                                <span className="material-symbols-outlined text-base font-black">check_circle</span>
+                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${addTransactionType === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
+                                                <span className="material-symbols-outlined text-sm font-black">check_circle</span>
                                             </div>
                                         )}
                                         <div className="flex-1 min-w-0">
                                             <input type="text" value={s.description}
                                                 onChange={e => updateSub(s.id, 'description', e.target.value)}
-                                                className={`w-full py-1 text-sm outline-none placeholder:text-slate-300 bg-transparent ${isHeader ? 'font-black text-slate-800' : 'font-bold text-slate-700'
-                                                    }`}
-                                                placeholder={isGroupMode ? `ชื่อรายการที่ ${idx + 1}` : (!s.amount ? 'เช่น บันทึกการรับเงินเพื่อเก็บรักษา...' : `ชื่อรายการที่ ${idx + 1}`)} />
+                                                className={`w-full py-1 text-xs outline-none placeholder:text-slate-300 bg-transparent ${isHeader ? 'font-black text-slate-800' : 'font-bold text-slate-700'}`}
+                                                placeholder={isGroupMode ? `รายการ...` : (!s.amount ? 'เช่น บันทึกการรับเงิน...' : `รายการ...`)} />
                                         </div>
-                                        <div className={`flex items-center rounded-xl px-3 py-1.5 border-2 transition-all ${hasAmount
-                                            ? addTransactionType === 'income'
-                                                ? 'bg-emerald-50 border-emerald-100'
-                                                : 'bg-rose-50 border-rose-100'
+                                        <div className={`flex items-center rounded-lg px-2 py-1 border transition-all ${hasAmount
+                                            ? addTransactionType === 'income' ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'
                                             : 'bg-slate-50 border-slate-50'
                                             }`}>
                                             <input type="number" step="0.01" value={s.amount}
                                                 onChange={e => updateSub(s.id, 'amount', e.target.value)}
-                                                className={`w-24 py-0.5 text-sm font-black text-right outline-none bg-transparent ${hasAmount
+                                                className={`w-20 py-0.5 text-xs font-black text-right outline-none bg-transparent ${hasAmount
                                                     ? addTransactionType === 'income' ? 'text-emerald-700' : 'text-rose-700'
                                                     : 'text-slate-400'
                                                     }`}
@@ -1692,24 +1672,24 @@ const CashBookAddModal: React.FC<CashBookAddModalProps> = ({ isOpen, onClose, on
                 </div>
 
                 {/* Footer Section (Sticky) */}
-                <div className="p-8 border-t border-slate-100 shrink-0 bg-slate-50/80 backdrop-blur-md flex justify-between items-center">
+                <div className="p-6 border-t border-slate-100 shrink-0 bg-white shadow-[0_-8px_30px_rgb(0,0,0,0.04)] flex justify-between items-center">
                     <div className="text-left">
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">ยอดรวมสุทธิ</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">TOTAL AMOUNT</p>
                         <div className="flex items-baseline gap-1">
-                            <span className={`text-3xl font-black tracking-tighter ${addTransactionType === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            <span className={`text-2xl font-black tracking-tighter ${addTransactionType === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 {addTransactionType === 'income' ? '+' : '-'} {fmtMoney(subTotal || parseFloat(taxAmount) || parseFloat(taxManualAmount) || parseFloat(customExpenseAmount) || parseFloat(stateManualAmount) || 0)}
                             </span>
-                            <span className="text-sm font-black text-slate-400">บาท</span>
+                            <span className="text-[10px] font-bold text-slate-400">บาท</span>
                         </div>
                     </div>
-                    <div className="flex gap-4">
+                    <div className="flex gap-3">
                         <button type="button" onClick={onClose}
-                            className="px-8 py-4 rounded-2xl bg-white border-2 border-slate-100 text-slate-500 font-black text-sm hover:bg-slate-50 hover:border-slate-200 transition-all active:scale-95">
+                            className="px-6 py-3 rounded-xl bg-white border border-slate-200 text-slate-500 font-black text-[11px] hover:bg-slate-50 transition-all active:scale-95 uppercase tracking-wider">
                             ยกเลิก
                         </button>
                         <button type="submit"
-                            className={`px-12 py-4 rounded-2xl font-black text-white text-sm shadow-2xl transition-all active:scale-95 group flex items-center gap-2 ${addTransactionType === 'income' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'}`}>
-                            <span className="material-symbols-outlined text-base font-black">save</span>
+                            className={`px-8 py-3 rounded-xl font-black text-white text-[11px] shadow-lg transition-all active:scale-95 group flex items-center gap-2 uppercase tracking-wider ${addTransactionType === 'income' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-50' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-50'}`}>
+                            <span className="material-symbols-outlined text-[16px] font-black">save</span>
                             {showBorrowMode ? 'สร้างสัญญายืม' : 'บันทึกรายการ'}
                         </button>
                     </div>
